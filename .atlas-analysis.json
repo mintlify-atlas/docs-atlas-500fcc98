@@ -1,0 +1,122 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Typed XLSX",
+  "projectDescription": "A type-safe TypeScript library for exporting data to Excel files with powerful schema builder and cell formatting capabilities",
+  "theme": "palm",
+  "primaryColor": "#1fa669",
+  "lightColor": "#2dd17f",
+  "darkColor": "#188554",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/schemas",
+              "concepts/columns",
+              "concepts/transformers",
+              "concepts/formatters",
+              "concepts/styling"
+            ]
+          },
+          {
+            "group": "Schema Builder",
+            "pages": [
+              "schema/create-schema",
+              "schema/define-columns",
+              "schema/dynamic-columns",
+              "schema/column-summaries",
+              "schema/transformers",
+              "schema/formatters",
+              "schema/build"
+            ]
+          },
+          {
+            "group": "File Builder",
+            "pages": [
+              "builder/create-builder",
+              "builder/sheets",
+              "builder/tables",
+              "builder/layouts",
+              "builder/build"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/nested-data",
+              "advanced/multi-table-sheets",
+              "advanced/dynamic-styling",
+              "advanced/column-selection",
+              "advanced/context-injection"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/basic-export",
+              "examples/financial-report",
+              "examples/user-data",
+              "examples/multi-sheet"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Classes",
+            "pages": [
+              "api/excel-schema-builder",
+              "api/excel-builder"
+            ]
+          },
+          {
+            "group": "Types",
+            "pages": [
+              "api/types/schema",
+              "api/types/column",
+              "api/types/transformers",
+              "api/types/formatters",
+              "api/types/build-params"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Type-safe schema builder with strong TypeScript typing",
+    "Type-safe data serialization and transformation",
+    "Shared custom value transformers and formatters",
+    "Column summaries with computed values",
+    "Complex row structures with auto-merging",
+    "Dynamic column selection and mapping",
+    "Dynamic cell styling and formatting",
+    "Multi-sheet and multi-table support",
+    "Grid and linear layouts for tables"
+  ],
+  "publicApiSurface": [
+    "ExcelSchemaBuilder.create<T>()",
+    "ExcelSchemaBuilder.withTransformers()",
+    "ExcelSchemaBuilder.withFormatters()",
+    "ExcelSchemaBuilder.column()",
+    "ExcelSchemaBuilder.group()",
+    "ExcelSchemaBuilder.build()",
+    "ExcelBuilder.create()",
+    "ExcelBuilder.sheet()",
+    "ExcelBuilder.addTable()",
+    "ExcelBuilder.build()"
+  ]
+}
