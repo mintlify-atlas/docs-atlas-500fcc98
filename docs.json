@@ -10,12 +10,12 @@
   "navbar": {
     "primary": {
       "type": "github",
-      "href": "https://github.com/chronicstone/typed-xlsx"
+      "href": "https://github.com/Chronicstone/typed-xlsx"
     }
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/chronicstone/typed-xlsx"
+      "github": "https://github.com/Chronicstone/typed-xlsx"
     }
   },
   "navigation": {

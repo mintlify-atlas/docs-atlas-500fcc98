@@ -148,12 +148,8 @@ const userSchema = ExcelSchemaBuilder
   .create<User>()
   .withTransformers(transformers)
   .column('id', { key: 'id' })
-  .column('name', {
-    key: 'firstName',
-    // Combine first and last name
-    transform: (firstName, index, data) => 
-      `${data[index].firstName} ${data[index].lastName}`
-  })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
   .column('email', { key: 'email' })
   .column('roles', {
     key: 'roles',
