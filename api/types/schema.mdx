@@ -1,0 +1,151 @@
+---
+title: 'ExcelSchema'
+description: 'Type definition for Excel table schemas'
+---
+
+## Type Definition
+
+```typescript
+export interface ExcelSchema<
+  T extends GenericObject,
+  KeyPaths extends string,
+  Key extends string,
+  ContextMap extends { [key: string]: any } = {}
+> {
+  columns: Array<Column<T, KeyPaths, Key, any, any> | ColumnGroup<T, Key, KeyPaths, string, any, any, any>>
+  formatPresets: FormattersMap
+}
+```
+
+## Type Parameters
+
+<ParamField path="T" type="GenericObject">
+  The data type for rows in the Excel sheet
+</ParamField>
+
+<ParamField path="KeyPaths" type="string">
+  Valid nested property paths in the data type
+</ParamField>
+
+<ParamField path="Key" type="string">
+  Union of column keys defined in the schema
+</ParamField>
+
+<ParamField path="ContextMap" type="{ [key: string]: any }" default="{}">
+  Map of context types required by column groups
+</ParamField>
+
+## Properties
+
+<ResponseField name="columns" type="Array<Column | ColumnGroup>" required>
+  Array of column definitions and column groups. Each element is either:
+  - A `Column` object defining a single column
+  - A `ColumnGroup` object defining dynamic columns based on runtime context
+</ResponseField>
+
+<ResponseField name="formatPresets" type="FormattersMap" required>
+  Map of registered formatter functions and format strings that can be referenced by columns
+</ResponseField>
+
+## Usage
+
+Schemas are typically created using `ExcelSchemaBuilder.build()` rather than constructed manually:
+
+```typescript
+import { ExcelSchemaBuilder } from 'typed-xlsx'
+
+interface Product {
+  id: string
+  name: string
+  price: number
+  category: string
+}
+
+const schema = ExcelSchemaBuilder.create<Product>()
+  .withFormatters({
+    currency: '$#,##0.00'
+  })
+  .column('id', {
+    label: 'Product ID',
+    key: 'id'
+  })
+  .column('name', {
+    label: 'Product Name',
+    key: 'name'
+  })
+  .column('price', {
+    label: 'Price',
+    key: 'price',
+    format: { preset: 'currency' }
+  })
+  .build()
+
+// schema is of type:
+// ExcelSchema<Product, 'id' | 'name' | 'price' | 'category', 'id' | 'name' | 'price', {}>
+```
+
+## Type Extraction
+
+Use the `SchemaColumnKeys` utility type to extract column keys from a schema:
+
+```typescript
+export type SchemaColumnKeys<
+  T extends ExcelSchema<any, any, string>
+> = T['columns'] extends Array<Column<any, any, infer K, any, any> | ColumnGroup<any, infer K, any, any, any, any, any>> ? K : never
+```
+
+**Example:**
+```typescript
+type ColumnKeys = SchemaColumnKeys<typeof schema>
+// ColumnKeys = 'id' | 'name' | 'price'
+```
+
+## Context Requirements
+
+When a schema contains column groups, the `ContextMap` type parameter tracks the required context types:
+
+```typescript
+interface MonthContext {
+  months: string[]
+}
+
+const salesSchema = ExcelSchemaBuilder.create<SalesData>()
+  .column('product', { label: 'Product', key: 'name' })
+  .group<'group:months', MonthContext>('group:months', (builder, context) => {
+    context.months.forEach(month => {
+      builder.column(month, {
+        label: month,
+        key: (data) => data.monthlyData[month]
+      })
+    })
+  })
+  .build()
+
+// salesSchema is of type:
+// ExcelSchema<SalesData, string, 'product' | 'group:months', { 'group:months': MonthContext }>
+
+// When using this schema, TypeScript requires the context:
+ExcelBuilder.create()
+  .sheet('sales')
+  .addTable({
+    schema: salesSchema,
+    data: salesData,
+    context: {
+      'group:months': { months: ['Jan', 'Feb', 'Mar'] } // TypeScript enforces this
+    }
+  })
+```
+
+## Related Types
+
+- [Column](/api/types/column) - Column definition type
+- [ColumnGroup](/api/types/column#columngroup) - Column group definition
+- [FormattersMap](/api/types/formatters#formattersmap) - Formatter configuration
+- [TransformersMap](/api/types/transformers#transformersmap) - Transformer configuration
+
+## See Also
+
+- [ExcelSchemaBuilder](/api/excel-schema-builder) - Creating schemas
+- [Column Type](/api/types/column) - Column configuration options
+- [Transformers](/api/types/transformers) - Value transformation
+- [Formatters](/api/types/formatters) - Cell formatting

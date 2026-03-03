@@ -1,0 +1,359 @@
+---
+title: 'Transformers'
+description: 'Transform data values before exporting to Excel with type-safe transformers'
+---
+
+## Overview
+
+Transformers allow you to convert data values before they're written to Excel cells. They provide a reusable, type-safe way to handle common data transformations like formatting arrays, converting booleans, or computing derived values.
+
+## Why Use Transformers?
+
+Transformers offer several benefits:
+
+- **Reusability**: Define once, use across multiple columns and schemas
+- **Type Safety**: Automatically type-checked against source data types
+- **Consistency**: Ensure uniform data transformation across your exports
+- **Cleaner Code**: Separate transformation logic from schema definitions
+
+## Defining Transformers
+
+Transformers are defined as a map of functions before creating your schema:
+
+```ts
+import { TransformersMap } from '@chronicstone/typed-xlsx'
+
+const transformers = {
+  boolean: (value: boolean) => value ? 'Yes' : 'No',
+  list: (value: string[]) => value.join(', '),
+  arrayLength: (value: any[]) => value.length,
+} satisfies TransformersMap
+```
+
+### Transformer Function Signature
+
+```ts
+type ValueTransformer = (value: any, index: number) => CellValue
+```
+
+<ParamField path="value" type="any" required>
+  The source data value to transform. The actual type depends on the property being transformed.
+</ParamField>
+
+<ParamField path="index" type="number" required>
+  The row index (0-based) in the dataset. Useful for row-specific transformations.
+</ParamField>
+
+<ParamField path="returns" type="CellValue" required>
+  The transformed value. Can be a string, number, boolean, Date, null, undefined, or an array of these types.
+</ParamField>
+
+## Registering Transformers
+
+Use the `withTransformers()` method to register transformers with your schema:
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .withTransformers(transformers)
+  .column('roles', {
+    key: 'roles',
+    transform: 'list' // Reference transformer by name
+  })
+  .build()
+```
+
+### Method Signature
+
+```ts
+withTransformers<Transformers extends TransformersMap>(
+  transformers: Transformers
+): ExcelSchemaBuilder<T, KeyPaths, UsedKeys, TransformMap & Transformers, FormatMap, ContextMap>
+```
+
+<ParamField path="transformers" type="TransformersMap" required>
+  Object mapping transformer names to transformer functions.
+</ParamField>
+
+## Using Transformers
+
+### By Name (Registered Transformers)
+
+Reference a registered transformer by its string key:
+
+```ts
+const transformers = {
+  list: (value: string[]) => value.join(', '),
+  arrayLength: (value: any[]) => value.length,
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .withTransformers(transformers)
+  .column('roles', {
+    key: 'roles',
+    transform: 'list' // Type-safe: must match transformer name
+  })
+  .column('nbOrganizations', {
+    key: 'organizations',
+    transform: 'arrayLength'
+  })
+  .build()
+```
+
+### Inline Functions
+
+For one-off transformations, use inline functions:
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('organizationNames', {
+    key: 'organizations',
+    transform: (orgs) => orgs.map(org => org.name).join(', ')
+  })
+  .build()
+```
+
+### Using Row Index
+
+Access the row index in your transformer:
+
+```ts
+const transformers = {
+  withRowNumber: (value: string, index: number) => `${index + 1}. ${value}`,
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .withTransformers(transformers)
+  .column('numberedName', {
+    key: 'name',
+    transform: 'withRowNumber'
+  })
+  .build()
+```
+
+## Common Transformer Patterns
+
+### Boolean to Yes/No
+
+```ts
+const transformers = {
+  boolean: (value: boolean) => value ? 'Yes' : 'No',
+  booleanEmoji: (value: boolean) => value ? '✓' : '✗',
+}
+```
+
+### Array Transformations
+
+```ts
+const transformers = {
+  list: (value: string[]) => value.join(', '),
+  bulletList: (value: string[]) => value.map(item => `• ${item}`).join('\n'),
+  arrayLength: (value: any[]) => value.length,
+  firstElement: (value: any[]) => value[0] ?? 'N/A',
+}
+```
+
+### Number Formatting
+
+```ts
+const transformers = {
+  percentage: (value: number) => value * 100,
+  rounded: (value: number) => Math.round(value),
+  toK: (value: number) => value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toString(),
+}
+```
+
+### String Transformations
+
+```ts
+const transformers = {
+  uppercase: (value: string) => value.toUpperCase(),
+  lowercase: (value: string) => value.toLowerCase(),
+  truncate: (value: string) => value.length > 50 ? `${value.slice(0, 47)}...` : value,
+  initials: (value: string) => value.split(' ').map(word => word[0]).join(''),
+}
+```
+
+### Date Transformations
+
+```ts
+const transformers = {
+  dateToYear: (value: Date) => value.getFullYear(),
+  ageFromBirthdate: (value: Date) => {
+    const today = new Date()
+    const age = today.getFullYear() - value.getFullYear()
+    return age
+  },
+}
+```
+
+### Object Transformations
+
+```ts
+interface Organization {
+  id: number
+  name: string
+}
+
+const transformers = {
+  orgNames: (value: Organization[]) => value.map(org => org.name).join(', '),
+  firstOrgName: (value: Organization[]) => value[0]?.name ?? 'N/A',
+  orgCount: (value: Organization[]) => value.length,
+}
+```
+
+## Type Safety
+
+Transformers are type-checked against the source data:
+
+```ts
+interface User {
+  roles: string[]
+  isActive: boolean
+}
+
+const transformers = {
+  list: (value: string[]) => value.join(', '),
+  boolean: (value: boolean) => value ? 'Yes' : 'No',
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .withTransformers(transformers)
+  .column('roles', {
+    key: 'roles',
+    transform: 'list' // ✅ Valid: roles is string[]
+  })
+  .column('isActive', {
+    key: 'isActive',
+    transform: 'list' // ❌ Type error: isActive is boolean, not string[]
+  })
+  .build()
+```
+
+## Combining Transformers and Formatters
+
+Transformers run before formatters. Use transformers to convert data types and formatters to apply Excel display formats:
+
+```ts
+const transformers = {
+  percentage: (value: number) => value * 100,
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .withTransformers(transformers)
+  .column('conversionRate', {
+    key: 'conversionRate', // 0.156 in source data
+    transform: 'percentage',  // Converts to 15.6
+    format: '0.00%'           // Displays as "15.60%" in Excel
+  })
+  .build()
+```
+
+## Complete Example
+
+```ts
+import { ExcelSchemaBuilder, TransformersMap } from '@chronicstone/typed-xlsx'
+
+interface Organization {
+  id: number
+  name: string
+}
+
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  roles: string[]
+  isActive: boolean
+  organizations: Organization[]
+  balance: number
+}
+
+const transformers = {
+  boolean: (value: boolean) => value ? 'Yes' : 'No',
+  list: (value: string[]) => value.join(', '),
+  arrayLength: (value: any[]) => value.length,
+  orgNames: (value: Organization[]) => value.map(org => org.name).join(', '),
+  toDollars: (value: number) => value / 100,
+} satisfies TransformersMap
+
+const userExportSchema = ExcelSchemaBuilder
+  .create<User>()
+  .withTransformers(transformers)
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .column('roles', {
+    key: 'roles',
+    transform: 'list' // "admin, user, moderator"
+  })
+  .column('isActive', {
+    key: 'isActive',
+    transform: 'boolean' // "Yes" or "No"
+  })
+  .column('nbOrganizations', {
+    key: 'organizations',
+    transform: 'arrayLength' // 3
+  })
+  .column('organizationNames', {
+    key: 'organizations',
+    transform: 'orgNames' // "Acme Corp, TechStart Inc"
+  })
+  .column('balance', {
+    key: 'balance',
+    transform: 'toDollars',
+    format: '"$"#,##0.00'
+  })
+  .build()
+```
+
+<Note>
+  Transformers are shared across the schema and inherited by dynamic column groups. Define them once and use them anywhere in your schema.
+</Note>
+
+## Advanced: Multi-Value Returns
+
+Transformers can return arrays to create multi-row cells:
+
+```ts
+const transformers = {
+  splitLines: (value: string) => value.split('\n'),
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .withTransformers(transformers)
+  .column('multilineNotes', {
+    key: 'notes',
+    transform: 'splitLines' // Creates sub-rows for each line
+  })
+  .build()
+```
+
+<Warning>
+  When a transformer returns an array, Excel will automatically merge cells and create sub-rows. Ensure this behavior aligns with your export requirements.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Formatters" icon="paintbrush" href="/schema/formatters">
+    Apply Excel number formats and custom presets
+  </Card>
+  <Card title="Define Columns" icon="table-columns" href="/schema/define-columns">
+    Learn about column definitions and options
+  </Card>
+  <Card title="Dynamic Columns" icon="layer-group" href="/schema/dynamic-columns">
+    Use transformers in dynamic column groups
+  </Card>
+  <Card title="Build Schema" icon="hammer" href="/schema/build">
+    Finalize and use your schema
+  </Card>
+</CardGroup>

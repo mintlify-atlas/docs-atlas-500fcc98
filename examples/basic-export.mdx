@@ -1,0 +1,151 @@
+---
+title: 'Basic Export'
+description: 'Learn how to create a simple Excel export with typed-xlsx'
+---
+
+## Overview
+
+This example demonstrates the basics of creating a type-safe Excel export. You'll learn how to:
+
+- Define a TypeScript interface for your data
+- Create a schema using `ExcelSchemaBuilder`
+- Build and export an Excel file with `ExcelBuilder`
+
+## Define Your Data Type
+
+Start by defining the TypeScript interface for the data you want to export:
+
+```typescript
+interface User {
+  id: string
+  name: string
+  birthDate: Date
+  balance: number
+}
+```
+
+## Create the Schema
+
+Use `ExcelSchemaBuilder` to define how your data maps to Excel columns:
+
+```typescript
+import { ExcelSchemaBuilder } from '@chronicstone/typed-xlsx'
+
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('id', { key: 'id' })
+  .column('name', { key: 'name' })
+  .column('birthDate', { 
+    key: 'birthDate', 
+    format: 'd mmm yyyy' 
+  })
+  .column('balance', { 
+    key: 'balance',
+    format: '"$"#,##0.00_);\\("$"#,##0.00\\)'
+  })
+  .build()
+```
+
+<Note>
+  The `key` property uses type-safe paths - TypeScript will autocomplete available properties from your interface.
+</Note>
+
+## Prepare Your Data
+
+Create an array of data matching your interface:
+
+```typescript
+const users: User[] = [
+  {
+    id: '1',
+    name: 'John Doe',
+    balance: 15000.50,
+    birthDate: new Date('1990-05-15'),
+  },
+  {
+    id: '2',
+    name: 'Jane Smith',
+    balance: 22500.75,
+    birthDate: new Date('1985-08-22'),
+  },
+]
+```
+
+## Build and Export
+
+Use `ExcelBuilder` to generate the Excel file:
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+import fs from 'node:fs'
+
+const buffer = ExcelBuilder.create()
+  .sheet('Users')
+  .addTable({ 
+    data: users, 
+    schema 
+  })
+  .build({ output: 'buffer' })
+
+fs.writeFileSync('users.xlsx', buffer)
+```
+
+## Complete Example
+
+Here's the full working code:
+
+```typescript
+import fs from 'node:fs'
+import { ExcelBuilder, ExcelSchemaBuilder } from '@chronicstone/typed-xlsx'
+
+interface User {
+  id: string
+  name: string
+  birthDate: Date
+  balance: number
+}
+
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('id', { key: 'id' })
+  .column('name', { key: 'name' })
+  .column('birthDate', { 
+    key: 'birthDate', 
+    format: 'd mmm yyyy' 
+  })
+  .column('balance', { 
+    key: 'balance',
+    format: '"$"#,##0.00_);\\("$"#,##0.00\\)'
+  })
+  .build()
+
+const users: User[] = [
+  {
+    id: '1',
+    name: 'John Doe',
+    balance: 15000.50,
+    birthDate: new Date('1990-05-15'),
+  },
+  {
+    id: '2',
+    name: 'Jane Smith',
+    balance: 22500.75,
+    birthDate: new Date('1985-08-22'),
+  },
+]
+
+const buffer = ExcelBuilder.create()
+  .sheet('Users')
+  .addTable({ data: users, schema })
+  .build({ output: 'buffer' })
+
+fs.writeFileSync('users.xlsx', buffer)
+```
+
+<Tip>
+  Excel format codes follow the standard Excel number format syntax. Use `d mmm yyyy` for dates, `#,##0.00` for numbers with decimals, and `"$"#,##0.00` for currency.
+</Tip>
+
+## Next Steps
+
+- Learn about [custom transformers](/examples/user-data) for complex data transformations
+- Explore [financial reports](/examples/financial-report) with summaries and styling
+- Create [multi-sheet workbooks](/examples/multi-sheet) with multiple tables

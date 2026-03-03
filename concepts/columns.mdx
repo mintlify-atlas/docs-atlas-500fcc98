@@ -1,0 +1,343 @@
+---
+title: 'Columns'
+description: 'Configure columns with labels, keys, defaults, transformations, and styling'
+---
+
+## Overview
+
+Columns define how data fields are extracted, transformed, and displayed in your Excel export. Each column can specify a data source (key or function), transformation logic, formatting rules, and styling options.
+
+## Basic Column Definition
+
+Define a column with `columnKey`, `key`, and optional `label`:
+
+```typescript
+import { ExcelSchemaBuilder } from 'typed-xlsx'
+
+interface User {
+  id: number
+  name: string
+  email: string
+}
+
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('userId', {
+    key: 'id',
+    label: 'User ID' // Header text (defaults to columnKey if omitted)
+  })
+  .column('email', {
+    key: 'email'
+    // label defaults to 'email'
+  })
+  .build()
+```
+
+<Note>
+The `columnKey` must be unique within a schema. It's used for column selection and identification.
+</Note>
+
+## Data Source Options
+
+### Path-Based Keys
+
+Use dot notation to access nested properties:
+
+```typescript
+interface Order {
+  id: string
+  customer: {
+    name: string
+    address: {
+      city: string
+    }
+  }
+}
+
+const schema = ExcelSchemaBuilder.create<Order>()
+  .column('customer-name', {
+    key: 'customer.name'
+  })
+  .column('city', {
+    key: 'customer.address.city'
+  })
+  .build()
+```
+
+### Function-Based Keys
+
+Use a function to compute values dynamically:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('full-name', {
+    key: (data) => `${data.firstName} ${data.lastName}`,
+    label: 'Full Name'
+  })
+  .column('is-active', {
+    key: (data) => data.status === 'active',
+    label: 'Active'
+  })
+  .build()
+```
+
+<Tip>
+Function-based keys have access to the entire row object, allowing computed values and complex logic.
+</Tip>
+
+## Default Values
+
+Provide default values for null, undefined, or empty cells:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('phone', {
+    key: 'phone',
+    default: 'N/A' // Shown when phone is null/undefined/empty
+  })
+  .column('age', {
+    key: 'age',
+    default: 0 // Numeric default
+  })
+  .build()
+```
+
+Defaults apply when the value is:
+- `undefined`
+- `null`
+- Empty string `''`
+- Empty array `[]` (after transformation)
+
+## Transformations
+
+Transform values before writing to Excel. Use registered transformers or inline functions:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .withTransformers({
+    uppercase: (value: string) => value.toUpperCase()
+  })
+  .column('name', {
+    key: 'name',
+    transform: 'uppercase' // Named transformer
+  })
+  .column('email', {
+    key: 'email',
+    transform: (value, index) => value.toLowerCase() // Inline function
+  })
+  .build()
+```
+
+<Info>
+Transformers receive two parameters: `value` (the extracted value) and `index` (the row index).
+</Info>
+
+See [Transformers](/concepts/transformers) for more details.
+
+## Formatting
+
+Control how values are displayed in Excel:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Product>()
+  .withFormatters({
+    currency: '$#,##0.00',
+    percentage: '0.00%'
+  })
+  .column('price', {
+    key: 'price',
+    format: { preset: 'currency' } // Use registered formatter
+  })
+  .column('discount', {
+    key: 'discount',
+    format: '0.0%' // Excel format string
+  })
+  .column('status', {
+    key: 'status',
+    format: (rowData, rowIndex, subRowIndex) => {
+      return rowData.status === 'active' ? '0.00%' : ''
+    }
+  })
+  .build()
+```
+
+Format options:
+- **Preset**: `{ preset: 'formatName', params: {...} }` - Use registered formatter
+- **String**: Excel format string (e.g., `'$#,##0.00'`, `'0.00%'`)
+- **Function**: Dynamic formatting based on row data
+
+See [Formatters](/concepts/formatters) for more details.
+
+## Cell Styling
+
+Apply custom styles to individual cells:
+
+```typescript
+import type { CellStyle } from 'xlsx-js-style'
+
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('status', {
+    key: 'status',
+    cellStyle: (rowData, rowIndex, subRowIndex) => {
+      const style: CellStyle = {
+        fill: {
+          fgColor: { rgb: rowData.status === 'active' ? '90EE90' : 'FFB6C1' }
+        },
+        font: {
+          bold: rowData.status === 'active'
+        }
+      }
+      return style
+    }
+  })
+  .build()
+```
+
+Cell style can be:
+- **Static object**: `CellStyle` applied to all cells in the column
+- **Function**: Dynamic styling based on `rowData`, `rowIndex`, and `subRowIndex`
+
+<Info>
+Cell styles use the [xlsx-js-style](https://github.com/gitbrent/xlsx-js-style) format with properties like `fill`, `font`, `border`, `alignment`, etc.
+</Info>
+
+## Header Styling
+
+Customize the column header appearance:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('name', {
+    key: 'name',
+    label: 'Full Name',
+    headerStyle: {
+      fill: { fgColor: { rgb: '4472C4' } },
+      font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 14 },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    }
+  })
+  .build()
+```
+
+Default header style (from `utils.ts:109`):
+```typescript
+{
+  font: { bold: true },
+  alignment: { horizontal: 'center', vertical: 'center' },
+  fill: { fgColor: { rgb: 'E9E9E9' } },
+  border: { /* borders */ }
+}
+```
+
+## Summary Rows
+
+Add summary rows below the data with aggregate calculations:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Sale>()
+  .column('product', {
+    key: 'product',
+    summary: [
+      {
+        value: (data) => 'Total',
+        cellStyle: { font: { bold: true } }
+      }
+    ]
+  })
+  .column('amount', {
+    key: 'amount',
+    summary: [
+      {
+        value: (data) => data.reduce((sum, row) => sum + row.amount, 0),
+        format: { preset: 'currency' },
+        cellStyle: (data) => ({
+          fill: { fgColor: { rgb: 'FFEB9C' } },
+          font: { bold: true }
+        })
+      }
+    ]
+  })
+  .build()
+```
+
+Each summary entry has:
+- `value`: Function receiving all data rows, returns the summary value
+- `format`: Optional formatter (preset or string)
+- `cellStyle`: Optional style (object or function)
+
+<Tip>
+You can add multiple summary rows by adding more entries to the `summary` array. All columns will align their summary rows.
+</Tip>
+
+## Array Values
+
+Columns can return arrays to create multi-row cells:
+
+```typescript
+interface Order {
+  orderId: string
+  items: string[]
+}
+
+const schema = ExcelSchemaBuilder.create<Order>()
+  .column('order-id', {
+    key: 'orderId'
+  })
+  .column('items', {
+    key: 'items', // Array value
+    transform: (items) => items // Keep as array
+  })
+  .build()
+```
+
+When a column returns an array:
+- Each array element is placed in a separate cell vertically
+- Other columns in the same row are merged to match the height
+- Empty cells are added as needed to maintain alignment
+
+<Note>
+Array values create row spanning. The library automatically handles cell merging and border styling.
+</Note>
+
+## Type Safety
+
+The Column type ensures type safety:
+
+```typescript
+// From types.ts:88-113
+export type Column<
+  T extends GenericObject,
+  FieldValue extends string | ((data: T) => CellValue),
+  ColKey extends string,
+  TransformMap extends TransformersMap,
+  FormatMap extends FormattersMap,
+  Preset extends FormatterPreset<FormatMap>[keyof FormatMap] = never,
+> = {
+  type: 'column'
+  label?: string
+  columnKey: ColKey
+  key: FieldValue
+  default?: CellValue
+  format?: Preset | string | ((rowData: T, rowIndex: number, subRowIndex: number) => string | Preset)
+  cellStyle?: CellStyle | ((rowData: T, rowIndex: number, subRowIndex: number) => CellStyle)
+  headerStyle?: CellStyle
+  summary?: Array<{
+    value: (data: T[]) => BaseCellValue
+    format?: string | Preset | ((data: T[]) => string | Preset)
+    cellStyle?: CellStyle | ((data: T[]) => CellStyle)
+  }>
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Transformers" icon="rotate" href="/concepts/transformers">
+    Learn about data transformations
+  </Card>
+  <Card title="Formatters" icon="palette" href="/concepts/formatters">
+    Explore formatting options
+  </Card>
+  <Card title="Styling" icon="paintbrush" href="/concepts/styling">
+    Deep dive into cell and header styling
+  </Card>
+</CardGroup>

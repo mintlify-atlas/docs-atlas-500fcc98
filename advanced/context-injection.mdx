@@ -1,0 +1,465 @@
+---
+title: 'Context Injection & Dynamic Column Groups'
+description: 'Generate columns dynamically at build-time using type-safe context injection'
+icon: 'wand-magic-sparkles'
+---
+
+## Overview
+
+Context injection is one of typed-xlsx's most powerful features. It allows you to define dynamic column groups that are generated at build-time based on external context data. This enables scenarios like creating a column for each organization, department, category, or any other dynamic set of entities.
+
+## Basic Context Injection
+
+Define a dynamic column group using the `.group()` method:
+
+```typescript
+interface User {
+  id: number
+  firstName: string
+  organizations: Organization[]
+}
+
+interface Organization {
+  id: number
+  name: string
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .group('group:org', (builder, context: Organization[]) => {
+    for (const org of context) {
+      builder.column(`org-${org.id}`, {
+        label: `Member of ${org.name}`,
+        key: 'organizations',
+        transform: (orgs) => orgs.some(o => o.id === org.id) ? 'Yes' : 'No'
+      })
+    }
+  })
+  .build()
+```
+
+Provide the context when building:
+
+```typescript
+const organizations = [
+  { id: 1, name: 'Engineering' },
+  { id: 2, name: 'Sales' },
+  { id: 3, name: 'Marketing' }
+]
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users with Orgs')
+  .addTable({
+    data: users,
+    schema: schema,
+    context: {
+      'group:org': organizations // Must match group key
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+This generates three columns: "Member of Engineering", "Member of Sales", and "Member of Marketing".
+
+<Tip>
+  Group keys must start with `group:` to distinguish them from regular columns.
+</Tip>
+
+## Type-Safe Context
+
+The context parameter is fully type-safe:
+
+```typescript
+interface ContextMap {
+  'group:org': Organization[]
+  'group:dept': Department[]
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('name', { key: 'name' })
+  .group('group:org', (builder, context: Organization[]) => {
+    // context is typed as Organization[]
+  })
+  .group('group:dept', (builder, context: Department[]) => {
+    // context is typed as Department[]
+  })
+  .build()
+
+// TypeScript enforces correct context structure
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: schema,
+    context: {
+      'group:org': organizations,  // ✅ Required
+      'group:dept': departments    // ✅ Required
+    }
+    // Missing either context key will cause TypeScript error
+  })
+  .build({ output: 'buffer' })
+```
+
+## Group Handler Function
+
+The group handler receives a schema builder and context:
+
+```typescript
+type GroupHandler<T, Context> = (
+  builder: ExcelSchemaBuilder<T, ...>,
+  context: Context
+) => void
+```
+
+You can use the builder to add columns dynamically:
+
+```typescript
+.group('group:categories', (builder, context: Category[]) => {
+  context.forEach(category => {
+    // Add a column for each category
+    builder.column(`category-${category.id}`, {
+      label: category.name,
+      key: 'items',
+      transform: (items) => {
+        const categoryItem = items.find(i => i.categoryId === category.id)
+        return categoryItem?.value ?? 0
+      },
+      format: '#,##0'
+    })
+  })
+})
+```
+
+## Advanced Patterns
+
+### Multiple Columns per Context Item
+
+```typescript
+interface Metric {
+  id: string
+  name: string
+  unit: string
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('name', { key: 'name' })
+  .group('group:metrics', (builder, context: Metric[]) => {
+    for (const metric of context) {
+      // Add value column
+      builder.column(`${metric.id}-value`, {
+        label: `${metric.name} (${metric.unit})`,
+        key: 'metrics',
+        transform: (metrics) => 
+          metrics.find(m => m.id === metric.id)?.value ?? 0
+      })
+      
+      // Add change column
+      builder.column(`${metric.id}-change`, {
+        label: `${metric.name} Change`,
+        key: 'metrics',
+        transform: (metrics) => {
+          const m = metrics.find(m => m.id === metric.id)
+          return m ? `${m.change > 0 ? '+' : ''}${m.change}%` : 'N/A'
+        }
+      })
+    }
+  })
+  .build()
+```
+
+### Conditional Column Generation
+
+```typescript
+.group('group:features', (builder, context: Feature[]) => {
+  const activeFeatures = context.filter(f => f.enabled)
+  
+  activeFeatures.forEach(feature => {
+    builder.column(`feature-${feature.id}`, {
+      label: feature.displayName,
+      key: 'features',
+      transform: (features) => 
+        features.includes(feature.id) ? '✓' : '✗'
+    })
+  })
+})
+```
+
+### Styled Dynamic Columns
+
+```typescript
+.group('group:org', (builder, context: Organization[]) => {
+  for (const org of context) {
+    builder.column(`org-${org.id}`, {
+      label: `User in ${org.name}`,
+      key: 'organizations',
+      transform: (orgs) => orgs.some(o => o.id === org.id) ? 'YES' : 'NO',
+      cellStyle: (data) => ({
+        font: {
+          color: { 
+            rgb: data.organizations.some(o => o.id === org.id) 
+              ? '61eb34'  // Green for YES
+              : 'd10808'  // Red for NO
+          },
+          bold: true
+        }
+      })
+    })
+  }
+})
+```
+
+<Warning>
+  The group handler is called during table build, not schema build. This means the same schema can be used with different contexts for different tables.
+</Warning>
+
+## Combining with Column Selection
+
+Use column selection to control which dynamic columns are included:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('All Organizations')
+  .addTable({
+    data: users,
+    schema: schema,
+    context: {
+      'group:org': allOrganizations
+    }
+  })
+  .sheet('Specific Organization')
+  .addTable({
+    data: users,
+    schema: schema,
+    select: {
+      firstName: true,
+      lastName: true,
+      'org-123': true // Include only one org column
+    },
+    context: {
+      'group:org': allOrganizations
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+<Accordion title="Context Requirements with Selection">
+  TypeScript automatically determines which contexts are required based on your column selection:
+
+  ```typescript
+  // Selected columns don't include any from 'group:org'
+  .addTable({
+    data: users,
+    schema: schema,
+    select: { firstName: true, lastName: true }
+    // context not required - TypeScript won't enforce it
+  })
+
+  // Selected columns include columns from 'group:org'
+  .addTable({
+    data: users,
+    schema: schema,
+    select: { firstName: true, 'org-123': true },
+    context: { 'group:org': organizations } // ✅ Required by TypeScript
+  })
+  ```
+</Accordion>
+
+## Multiple Context Groups
+
+You can define multiple independent context groups:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<Employee>()
+  .column('name', { key: 'name' })
+  .group('group:departments', (builder, context: Department[]) => {
+    context.forEach(dept => {
+      builder.column(`dept-${dept.id}`, {
+        label: dept.name,
+        key: 'departmentId',
+        transform: (deptId) => deptId === dept.id ? '✓' : ''
+      })
+    })
+  })
+  .group('group:skills', (builder, context: Skill[]) => {
+    context.forEach(skill => {
+      builder.column(`skill-${skill.id}`, {
+        label: skill.name,
+        key: 'skills',
+        transform: (skills) => skills.includes(skill.id) ? 'Yes' : 'No'
+      })
+    })
+  })
+  .build()
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Full Matrix')
+  .addTable({
+    data: employees,
+    schema: schema,
+    context: {
+      'group:departments': departments,
+      'group:skills': skills
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+## Real-World Example
+
+From the library's README:
+
+```typescript
+const userExportSchema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .group('group:org', (builder, context: Organization[]) => {
+    for (const org of context) {
+      builder
+        .column(`orga-${org.id}`, {
+          label: `User in ${org.name}`,
+          key: 'organizations',
+          transform: orgs => orgs.some(o => o.id === org.id) ? 'YES' : 'NO',
+          cellStyle: data => ({
+            font: {
+              color: { 
+                rgb: data.organizations.some(o => o.id === org.id) 
+                  ? '61eb34' 
+                  : 'd10808' 
+              }
+            }
+          })
+        })
+    }
+  })
+  .build()
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users - full')
+  .addTable({
+    data: users,
+    schema: userExportSchema,
+    context: {
+      'group:org': organizations
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+## Implementation Details
+
+When a table is built, the library:
+
+1. Processes regular columns first
+2. For each group:
+   - Creates a fresh builder instance
+   - Calls the group handler with the context
+   - Extracts generated columns from the builder
+   - Flattens them into the column list
+3. Applies column selection filters
+4. Builds the table with the final column set
+
+From the source:
+
+```typescript
+const columns = table.schema.columns
+  .filter((column) => {
+    // Apply selection logic
+  })
+  .map((column) => {
+    if (column.type === 'column') {
+      return column
+    } else {
+      // Handle group
+      const builder = column.builder()
+      column.handler(builder, table.context[column.columnKey])
+      const { columns } = builder.build()
+      return columns
+    }
+  })
+  .flat()
+```
+
+## Best Practices
+
+1. **Naming convention**: Use `group:` prefix for all context group keys
+2. **Column keys**: Generate unique column keys using context item IDs
+3. **Type safety**: Always specify generic type for context in handler
+4. **Reusable schemas**: Design schemas to work with various contexts
+5. **Performance**: Context is evaluated at build-time, not runtime
+6. **Documentation**: Comment the expected context structure in your schema
+
+## Common Use Cases
+
+<Accordion title="Feature Flags Matrix">
+  Generate a column for each feature flag to show user access:
+
+  ```typescript
+  .group('group:features', (builder, context: FeatureFlag[]) => {
+    context.forEach(flag => {
+      builder.column(`feature-${flag.key}`, {
+        label: flag.name,
+        key: 'enabledFeatures',
+        transform: (enabled) => enabled.includes(flag.key) ? '✓' : ''
+      })
+    })
+  })
+  ```
+</Accordion>
+
+<Accordion title="Time Series Data">
+  Generate columns for each time period:
+
+  ```typescript
+  .group('group:months', (builder, context: string[]) => {
+    context.forEach(month => {
+      builder.column(`month-${month}`, {
+        label: month,
+        key: 'monthlyData',
+        transform: (data) => data[month] ?? 0,
+        format: '"$"#,##0.00'
+      })
+    })
+  })
+  ```
+</Accordion>
+
+<Accordion title="Comparison Matrix">
+  Compare entities across multiple dimensions:
+
+  ```typescript
+  .group('group:competitors', (builder, context: Competitor[]) => {
+    context.forEach(competitor => {
+      builder
+        .column(`${competitor.id}-price`, {
+          label: `${competitor.name} Price`,
+          key: 'competitorPrices',
+          transform: (prices) => prices[competitor.id]?.price,
+          format: '"$"#,##0.00'
+        })
+        .column(`${competitor.id}-rating`, {
+          label: `${competitor.name} Rating`,
+          key: 'competitorPrices',
+          transform: (prices) => prices[competitor.id]?.rating,
+          format: '0.0 ⭐'
+        })
+    })
+  })
+  ```
+</Accordion>
+
+<Tip>
+  Context injection is particularly powerful when combined with data filtering. Fetch different context based on user roles, date ranges, or other criteria to create personalized exports.
+</Tip>

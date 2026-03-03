@@ -1,0 +1,165 @@
+---
+title: 'Sheets'
+description: 'Add and configure sheets in your Excel workbook'
+---
+
+## Adding Sheets
+
+### sheet()
+
+Adds a new sheet to the workbook and returns a `SheetTableBuilder` for adding tables.
+
+```typescript
+sheet<Key extends string>(
+  key: Not<Key, UsedSheetKeys>,
+  params?: SheetParams
+): SheetTableBuilder<ExcelBuilder<UsedSheetKeys | Key>, UsedSheetKeys | Key>
+```
+
+<ParamField path="key" type="string" required>
+  Unique identifier for the sheet. Must not conflict with existing sheet keys.
+</ParamField>
+
+<ParamField path="params" type="SheetParams">
+  Optional configuration for sheet layout and appearance.
+</ParamField>
+
+## Sheet Parameters
+
+### SheetParams Interface
+
+```typescript
+interface SheetParams {
+  tableSeparatorWidth?: number
+  tablesPerRow?: number
+}
+```
+
+<ParamField path="tableSeparatorWidth" type="number" default={25}>
+  Width (in Excel column units) for the separator columns between tables when multiple tables exist in a sheet.
+</ParamField>
+
+<ParamField path="tablesPerRow" type="number">
+  Number of tables to display per row. When set, tables are arranged in a grid layout instead of a single column.
+</ParamField>
+
+## Examples
+
+### Basic Sheet
+
+Create a simple sheet with default parameters:
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+const builder = ExcelBuilder.create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: userSchema,
+  })
+```
+
+### Grid Layout
+
+Arrange multiple tables in a 2-column grid:
+
+```typescript
+const builder = ExcelBuilder.create()
+  .sheet('Reports', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Q1 Sales',
+    data: q1Data,
+    schema: salesSchema,
+  })
+  .addTable({
+    title: 'Q2 Sales',
+    data: q2Data,
+    schema: salesSchema,
+  })
+  .addTable({
+    title: 'Q3 Sales',
+    data: q3Data,
+    schema: salesSchema,
+  })
+  .addTable({
+    title: 'Q4 Sales',
+    data: q4Data,
+    schema: salesSchema,
+  })
+```
+
+<Tip>
+  Grid layouts are perfect for displaying multiple related tables side-by-side, like quarterly reports or comparisons.
+</Tip>
+
+### Custom Table Separators
+
+Adjust the spacing between tables:
+
+```typescript
+const builder = ExcelBuilder.create()
+  .sheet('Analytics', {
+    tableSeparatorWidth: 40, // Wider spacing
+    tablesPerRow: 3,
+  })
+  .addTable({ data: data1, schema: schema1 })
+  .addTable({ data: data2, schema: schema2 })
+  .addTable({ data: data3, schema: schema3 })
+```
+
+## Multiple Sheets
+
+You can add multiple sheets to a single workbook:
+
+```typescript
+const buffer = ExcelBuilder.create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: userSchema,
+  })
+  .sheet('Products')
+  .addTable({
+    data: products,
+    schema: productSchema,
+  })
+  .sheet('Orders')
+  .addTable({
+    data: orders,
+    schema: orderSchema,
+  })
+  .build({ output: 'buffer' })
+```
+
+<Note>
+  Sheet keys must be unique. TypeScript will prevent you from creating duplicate sheets at compile time.
+</Note>
+
+## Return Value
+
+The `sheet()` method returns a `SheetTableBuilder` with the following methods:
+
+```typescript
+interface SheetTableBuilder<Builder, UsedKeys> {
+  addTable: (table: SheetTable) => SheetTableBuilder<Builder, UsedKeys>
+  sheet: (key: string, params?: SheetParams) => SheetTableBuilder<...>
+  build: (params: ExcelBuildParams) => Output
+}
+```
+
+This allows you to:
+- Add tables to the current sheet with `addTable()`
+- Add a new sheet with `sheet()`
+- Build the final output with `build()`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Add Tables" icon="table-cells" href="/builder/tables">
+    Learn how to add tables to your sheets
+  </Card>
+  <Card title="Layouts" icon="grid" href="/builder/layouts">
+    Master grid and linear layouts
+  </Card>
+</CardGroup>

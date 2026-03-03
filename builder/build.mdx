@@ -1,0 +1,441 @@
+---
+title: 'Build'
+description: 'Generate Excel files in various output formats'
+---
+
+## Overview
+
+The `build()` method is the final step in the ExcelBuilder chain. It compiles all sheets and tables into an Excel workbook and outputs it in your chosen format.
+
+## Build Method
+
+### Signature
+
+```typescript
+build<OutputType extends TOutputType>(
+  params: ExcelBuildParams<OutputType>
+): ExcelBuildOutput<OutputType>
+```
+
+### Parameters
+
+```typescript
+interface ExcelBuildParams<Output extends TOutputType> {
+  output: Output
+  rtl?: boolean
+  extraLength?: number
+  rowHeight?: number
+  bordered?: boolean
+}
+```
+
+<ParamField path="output" type="'buffer' | 'workbook' | 'base64' | 'file'" required>
+  Output format for the Excel file.
+  - `'buffer'`: Node.js Buffer (for file system writes)
+  - `'workbook'`: XLSX WorkBook object (for further manipulation)
+  - `'base64'`: Base64-encoded string (for transmission)
+  - `'file'`: Browser File object (for downloads)
+</ParamField>
+
+<ParamField path="rtl" type="boolean" default={false}>
+  Enable right-to-left text direction for languages like Arabic or Hebrew.
+</ParamField>
+
+<ParamField path="extraLength" type="number" default={5}>
+  Additional padding (in characters) added to auto-calculated column widths.
+</ParamField>
+
+<ParamField path="rowHeight" type="number" default={30}>
+  Default height for data rows in pixels. Title rows use a fixed height of 40px.
+</ParamField>
+
+<ParamField path="bordered" type="boolean" default={true}>
+  Whether to apply borders to cells. Disable for a cleaner, borderless look.
+</ParamField>
+
+## Output Formats
+
+### Buffer Output
+
+Perfect for server-side file generation:
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+import fs from 'node:fs'
+
+const buffer = ExcelBuilder.create()
+  .sheet('Users')
+  .addTable({ data: users, schema: userSchema })
+  .build({ output: 'buffer' })
+
+// Write to file system
+fs.writeFileSync('users.xlsx', buffer)
+
+// Send as HTTP response (Express)
+res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+res.setHeader('Content-Disposition', 'attachment; filename=users.xlsx')
+res.send(buffer)
+```
+
+### Workbook Output
+
+For advanced manipulation before export:
+
+```typescript
+const workbook = ExcelBuilder.create()
+  .sheet('Data')
+  .addTable({ data: myData, schema: mySchema })
+  .build({ output: 'workbook' })
+
+// Further manipulate the workbook
+workbook.Props = {
+  Title: 'My Report',
+  Author: 'John Doe',
+  CreatedDate: new Date(),
+}
+
+// Export manually
+import XLSX from 'xlsx-js-style'
+const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+```
+
+### Base64 Output
+
+For API responses or data URLs:
+
+```typescript
+const base64 = ExcelBuilder.create()
+  .sheet('Data')
+  .addTable({ data: myData, schema: mySchema })
+  .build({ output: 'base64' })
+
+// Return in API response
+return {
+  filename: 'export.xlsx',
+  data: base64,
+  mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+}
+
+// Or create a data URL
+const dataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`
+```
+
+### File Output
+
+For browser downloads:
+
+```typescript
+const file = ExcelBuilder.create()
+  .sheet('Data')
+  .addTable({ data: myData, schema: mySchema })
+  .build({ output: 'file' })
+
+// Trigger download in browser
+const url = URL.createObjectURL(file)
+const link = document.createElement('a')
+link.href = url
+link.download = 'export.xlsx'
+link.click()
+URL.revokeObjectURL(url)
+```
+
+## Customization Options
+
+### Right-to-Left Support
+
+Enable RTL for Hebrew, Arabic, or other RTL languages:
+
+```typescript
+const buffer = ExcelBuilder.create()
+  .sheet('נתונים') // Hebrew: "Data"
+  .addTable({ data: hebrewData, schema: hebrewSchema })
+  .build({
+    output: 'buffer',
+    rtl: true,
+  })
+```
+
+### Custom Row Height
+
+Adjust row height for better readability:
+
+```typescript
+const buffer = ExcelBuilder.create()
+  .sheet('Products')
+  .addTable({ data: products, schema: productSchema })
+  .build({
+    output: 'buffer',
+    rowHeight: 40, // Taller rows
+  })
+```
+
+### Column Width Padding
+
+Fine-tune column widths:
+
+```typescript
+const buffer = ExcelBuilder.create()
+  .sheet('Data')
+  .addTable({ data: myData, schema: mySchema })
+  .build({
+    output: 'buffer',
+    extraLength: 10, // More padding
+  })
+```
+
+<Tip>
+  Start with `extraLength: 5` (default) and adjust based on your data. Increase for longer values or special formatting.
+</Tip>
+
+### Borderless Style
+
+Create a cleaner, borderless look:
+
+```typescript
+const buffer = ExcelBuilder.create()
+  .sheet('Report')
+  .addTable({ data: reportData, schema: reportSchema })
+  .build({
+    output: 'buffer',
+    bordered: false,
+  })
+```
+
+## Complete Examples
+
+### Basic Export
+
+```typescript
+import { ExcelBuilder, ExcelSchemaBuilder } from '@chronicstone/typed-xlsx'
+import fs from 'node:fs'
+
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+}
+
+const userSchema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .build()
+
+const users: User[] = [
+  { id: 1, firstName: 'John', lastName: 'Doe', email: 'john@example.com' },
+  { id: 2, firstName: 'Jane', lastName: 'Smith', email: 'jane@example.com' },
+]
+
+const buffer = ExcelBuilder.create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: userSchema,
+  })
+  .build({ output: 'buffer' })
+
+fs.writeFileSync('users.xlsx', buffer)
+```
+
+### Multi-Sheet Report
+
+```typescript
+const buffer = ExcelBuilder.create()
+  .sheet('Summary')
+  .addTable({
+    title: '2024 Summary',
+    data: summaryData,
+    schema: summarySchema,
+  })
+  .sheet('Details', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Q1',
+    data: q1Data,
+    schema: quarterSchema,
+  })
+  .addTable({
+    title: 'Q2',
+    data: q2Data,
+    schema: quarterSchema,
+  })
+  .addTable({
+    title: 'Q3',
+    data: q3Data,
+    schema: quarterSchema,
+  })
+  .addTable({
+    title: 'Q4',
+    data: q4Data,
+    schema: quarterSchema,
+  })
+  .build({
+    output: 'buffer',
+    rowHeight: 35,
+    extraLength: 8,
+    bordered: true,
+  })
+
+fs.writeFileSync('annual-report.xlsx', buffer)
+```
+
+### API Endpoint (Express)
+
+```typescript
+import express from 'express'
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+const app = express()
+
+app.get('/export/users', async (req, res) => {
+  const users = await database.users.findMany()
+
+  const buffer = ExcelBuilder.create()
+    .sheet('Users')
+    .addTable({
+      data: users,
+      schema: userSchema,
+    })
+    .build({ output: 'buffer' })
+
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  )
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename=users-${new Date().toISOString()}.xlsx`
+  )
+  res.send(buffer)
+})
+```
+
+### Browser Download (React)
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+function ExportButton({ data, schema }) {
+  const handleExport = () => {
+    const file = ExcelBuilder.create()
+      .sheet('Data')
+      .addTable({ data, schema })
+      .build({ output: 'file' })
+
+    const url = URL.createObjectURL(file)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `export-${Date.now()}.xlsx`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return <button onClick={handleExport}>Export to Excel</button>
+}
+```
+
+## Advanced Configuration
+
+### All Options Together
+
+```typescript
+const buffer = ExcelBuilder.create()
+  .sheet('Dashboard', {
+    tablesPerRow: 2,
+    tableSeparatorWidth: 30,
+  })
+  .addTable({
+    title: 'Table 1',
+    data: data1,
+    schema: schema1,
+  })
+  .addTable({
+    title: 'Table 2',
+    data: data2,
+    schema: schema2,
+  })
+  .build({
+    output: 'buffer',
+    rtl: false,
+    extraLength: 7,
+    rowHeight: 32,
+    bordered: true,
+  })
+```
+
+## Return Types
+
+The return type is automatically inferred based on the `output` parameter:
+
+```typescript
+type ExcelBuildOutput<Output extends TOutputType> =
+  Output extends 'workbook' ? XLSX.WorkBook
+  : Output extends 'base64' ? string
+  : Output extends 'buffer' ? Buffer
+  : Output extends 'file' ? File
+  : never
+```
+
+```typescript
+const buffer: Buffer = builder.build({ output: 'buffer' })
+const base64: string = builder.build({ output: 'base64' })
+const workbook: XLSX.WorkBook = builder.build({ output: 'workbook' })
+const file: File = builder.build({ output: 'file' })
+```
+
+<Note>
+  TypeScript automatically infers the correct return type, providing full type safety throughout your export workflow.
+</Note>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Choosing the right output format">
+    - **Buffer**: Server-side file generation, API responses
+    - **Workbook**: When you need to manipulate the workbook further
+    - **Base64**: API responses, embedding in JSON
+    - **File**: Browser downloads, client-side exports
+  </Accordion>
+
+  <Accordion title="Performance considerations">
+    - For large datasets (10,000+ rows), consider streaming or chunking
+    - Disable borders (`bordered: false`) for faster generation
+    - Reduce `extraLength` to minimize file size
+    - Use column selection to export only needed data
+  </Accordion>
+
+  <Accordion title="File naming">
+    - Include timestamps for unique filenames
+    - Use descriptive names that indicate content
+    - Follow naming conventions: `users-2024-03-15.xlsx`
+  </Accordion>
+
+  <Accordion title="Error handling">
+    ```typescript
+    try {
+      const buffer = ExcelBuilder.create()
+        .sheet('Data')
+        .addTable({ data, schema })
+        .build({ output: 'buffer' })
+      
+      fs.writeFileSync('export.xlsx', buffer)
+    } catch (error) {
+      console.error('Export failed:', error)
+      // Handle error appropriately
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Schema Builder" icon="sitemap" href="/schema/create-schema">
+    Learn about creating schemas
+  </Card>
+  <Card title="Examples" icon="code" href="/examples">
+    See complete working examples
+  </Card>
+</CardGroup>

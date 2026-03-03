@@ -1,0 +1,336 @@
+---
+title: 'Layouts'
+description: 'Arrange multiple tables in linear or grid layouts within sheets'
+---
+
+## Overview
+
+When a sheet contains multiple tables, typed-xlsx supports two layout modes:
+
+1. **Linear Layout** (default): Tables stack vertically in a single column
+2. **Grid Layout**: Tables arrange in a grid with configurable rows and columns
+
+## Linear Layout
+
+### Default Behavior
+
+Without specifying `tablesPerRow`, tables are arranged vertically:
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+const buffer = ExcelBuilder.create()
+  .sheet('Reports') // No tablesPerRow = linear layout
+  .addTable({
+    title: 'Table 1',
+    data: data1,
+    schema: schema1,
+  })
+  .addTable({
+    title: 'Table 2',
+    data: data2,
+    schema: schema2,
+  })
+  .addTable({
+    title: 'Table 3',
+    data: data3,
+    schema: schema3,
+  })
+  .build({ output: 'buffer' })
+```
+
+**Result**: Tables are stacked vertically with separator rows between them.
+
+```
+┌─────────────┐
+│   Table 1   │
+└─────────────┘
+
+┌─────────────┐
+│   Table 2   │
+└─────────────┘
+
+┌─────────────┐
+│   Table 3   │
+└─────────────┘
+```
+
+### Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Sequential Reports" icon="list">
+    When tables represent sequential data or steps
+  </Card>
+  <Card title="Different Schemas" icon="table-columns">
+    When tables have different columns or structures
+  </Card>
+  <Card title="Full Width" icon="arrows-left-right">
+    When tables need maximum horizontal space
+  </Card>
+  <Card title="Simple Layouts" icon="layer-group">
+    When you want straightforward, easy-to-read layouts
+  </Card>
+</CardGroup>
+
+## Grid Layout
+
+### Configuration
+
+Set `tablesPerRow` in the sheet parameters to enable grid layout:
+
+```typescript
+const buffer = ExcelBuilder.create()
+  .sheet('Dashboard', { tablesPerRow: 2 })
+  .addTable({ title: 'Q1', data: q1Data, schema: quarterSchema })
+  .addTable({ title: 'Q2', data: q2Data, schema: quarterSchema })
+  .addTable({ title: 'Q3', data: q3Data, schema: quarterSchema })
+  .addTable({ title: 'Q4', data: q4Data, schema: quarterSchema })
+  .build({ output: 'buffer' })
+```
+
+**Result**: Tables arranged in a 2×2 grid.
+
+```
+┌─────────┐  ┌─────────┐
+│   Q1    │  │   Q2    │
+└─────────┘  └─────────┘
+
+┌─────────┐  ┌─────────┐
+│   Q3    │  │   Q4    │
+└─────────┘  └─────────┘
+```
+
+### Advanced Grid Example
+
+3-column grid with 6 tables:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Metrics', {
+    tablesPerRow: 3,
+    tableSeparatorWidth: 30,
+  })
+  .addTable({ title: 'Jan', data: janData, schema: monthSchema })
+  .addTable({ title: 'Feb', data: febData, schema: monthSchema })
+  .addTable({ title: 'Mar', data: marData, schema: monthSchema })
+  .addTable({ title: 'Apr', data: aprData, schema: monthSchema })
+  .addTable({ title: 'May', data: mayData, schema: monthSchema })
+  .addTable({ title: 'Jun', data: junData, schema: monthSchema })
+  .build({ output: 'buffer' })
+```
+
+**Result**: Two rows of three tables each.
+
+```
+┌─────┐  ┌─────┐  ┌─────┐
+│ Jan │  │ Feb │  │ Mar │
+└─────┘  └─────┘  └─────┘
+
+┌─────┐  ┌─────┐  ┌─────┐
+│ Apr │  │ May │  │ Jun │
+└─────┘  └─────┘  └─────┘
+```
+
+### Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Comparisons" icon="chart-simple">
+    Side-by-side comparison of similar datasets
+  </Card>
+  <Card title="Dashboards" icon="gauge">
+    Creating dashboard-style reports
+  </Card>
+  <Card title="Time Series" icon="clock">
+    Displaying periods (quarters, months) together
+  </Card>
+  <Card title="Categories" icon="folder-tree">
+    Showing different categories in parallel
+  </Card>
+</CardGroup>
+
+## Table Spacing
+
+### Separator Width
+
+Control the spacing between tables:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Reports', {
+    tablesPerRow: 2,
+    tableSeparatorWidth: 50, // Excel column units
+  })
+  .addTable({ data: data1, schema: schema1 })
+  .addTable({ data: data2, schema: schema2 })
+```
+
+<ParamField path="tableSeparatorWidth" type="number" default={25}>
+  Width of separator columns between tables in Excel column units.
+</ParamField>
+
+### Spacing Examples
+
+```typescript
+// Tight spacing
+{ tableSeparatorWidth: 10 }
+
+// Default spacing
+{ tableSeparatorWidth: 25 }
+
+// Wide spacing
+{ tableSeparatorWidth: 50 }
+```
+
+## Practical Examples
+
+### Quarterly Financial Report
+
+```typescript
+interface QuarterData {
+  category: string
+  revenue: number
+  expenses: number
+  profit: number
+}
+
+const quarterSchema = ExcelSchemaBuilder
+  .create<QuarterData>()
+  .column('category', { key: 'category' })
+  .column('revenue', {
+    key: 'revenue',
+    format: '"$"#,##0.00',
+    summary: [{ value: (data) => data.reduce((sum, row) => sum + row.revenue, 0) }],
+  })
+  .column('expenses', {
+    key: 'expenses',
+    format: '"$"#,##0.00',
+    summary: [{ value: (data) => data.reduce((sum, row) => sum + row.expenses, 0) }],
+  })
+  .column('profit', {
+    key: 'profit',
+    format: '"$"#,##0.00',
+    summary: [{ value: (data) => data.reduce((sum, row) => sum + row.profit, 0) }],
+  })
+  .build()
+
+const buffer = ExcelBuilder.create()
+  .sheet('2024 Quarterly Report', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Q1 2024',
+    data: q1Data,
+    schema: quarterSchema,
+  })
+  .addTable({
+    title: 'Q2 2024',
+    data: q2Data,
+    schema: quarterSchema,
+  })
+  .addTable({
+    title: 'Q3 2024',
+    data: q3Data,
+    schema: quarterSchema,
+  })
+  .addTable({
+    title: 'Q4 2024',
+    data: q4Data,
+    schema: quarterSchema,
+  })
+  .build({ output: 'buffer' })
+```
+
+### Department Dashboard
+
+```typescript
+interface DeptMetrics {
+  metric: string
+  current: number
+  target: number
+}
+
+const deptSchema = ExcelSchemaBuilder
+  .create<DeptMetrics>()
+  .column('metric', { key: 'metric' })
+  .column('current', { key: 'current', format: '#,##0' })
+  .column('target', { key: 'target', format: '#,##0' })
+  .build()
+
+const buffer = ExcelBuilder.create()
+  .sheet('Department Metrics', {
+    tablesPerRow: 3,
+    tableSeparatorWidth: 35,
+  })
+  .addTable({ title: 'Sales', data: salesMetrics, schema: deptSchema })
+  .addTable({ title: 'Marketing', data: marketingMetrics, schema: deptSchema })
+  .addTable({ title: 'Support', data: supportMetrics, schema: deptSchema })
+  .addTable({ title: 'Engineering', data: engMetrics, schema: deptSchema })
+  .addTable({ title: 'HR', data: hrMetrics, schema: deptSchema })
+  .addTable({ title: 'Finance', data: financeMetrics, schema: deptSchema })
+  .build({ output: 'buffer' })
+```
+
+### Mixed Layout: Multiple Sheets
+
+Combine different layouts in one workbook:
+
+```typescript
+const buffer = ExcelBuilder.create()
+  // Grid layout for comparisons
+  .sheet('Quarterly Comparison', { tablesPerRow: 2 })
+  .addTable({ title: 'Q1', data: q1, schema: quarterSchema })
+  .addTable({ title: 'Q2', data: q2, schema: quarterSchema })
+  .addTable({ title: 'Q3', data: q3, schema: quarterSchema })
+  .addTable({ title: 'Q4', data: q4, schema: quarterSchema })
+  // Linear layout for detailed data
+  .sheet('Full Year Details')
+  .addTable({
+    title: 'Complete Transaction Log',
+    data: allTransactions,
+    schema: transactionSchema,
+  })
+  .build({ output: 'buffer' })
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="When to use linear layout">
+    - Tables have different column structures
+    - Each table represents a different data type
+    - Tables are large and need full width
+    - Reading order is important (top to bottom)
+  </Accordion>
+
+  <Accordion title="When to use grid layout">
+    - Tables share the same schema
+    - Side-by-side comparison is valuable
+    - Creating dashboard-style views
+    - Space efficiency is important
+  </Accordion>
+
+  <Accordion title="Choosing tablesPerRow">
+    - 2 columns: Best for comparisons (before/after, actual/budget)
+    - 3 columns: Good for category breakdowns
+    - 4+ columns: Use sparingly, only for small tables
+  </Accordion>
+
+  <Accordion title="Managing separator width">
+    - Narrow tables (few columns): Use smaller separator (15-20)
+    - Wide tables (many columns): Use larger separator (30-40)
+    - Default (25): Works well for most cases
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  Test your layout with sample data to ensure tables fit well and are readable when exported.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Build Output" icon="file-export" href="/builder/build">
+    Generate the final Excel file
+  </Card>
+  <Card title="Schemas" icon="sitemap" href="/schema/create-schema">
+    Learn more about schema creation
+  </Card>
+</CardGroup>

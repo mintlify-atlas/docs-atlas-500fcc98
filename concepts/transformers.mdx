@@ -1,0 +1,313 @@
+---
+title: 'Transformers'
+description: 'Transform data values before exporting to Excel'
+---
+
+## Overview
+
+Transformers are functions that convert data values before they're written to Excel cells. They allow you to modify, format, or restructure data while maintaining type safety. Transformers are registered globally on the schema and can be referenced by name in column definitions.
+
+## Transformer Type
+
+A transformer is a function that takes a value and row index, and returns a cell value:
+
+```typescript
+// From types.ts:54
+export type ValueTransformer = (value: any, index: number) => CellValue
+
+// CellValue can be:
+export type BaseCellValue = string | number | boolean | null | undefined | Date
+export type CellValue = BaseCellValue | BaseCellValue[]
+```
+
+<Info>
+Transformers can return arrays to create multi-row cells. Each array element becomes a separate cell in the column.
+</Info>
+
+## Registering Transformers
+
+Register transformers using `withTransformers()` before defining columns:
+
+```typescript
+import { ExcelSchemaBuilder } from 'typed-xlsx'
+
+interface User {
+  firstName: string
+  lastName: string
+  email: string
+  createdAt: Date
+}
+
+const schema = ExcelSchemaBuilder.create<User>()
+  .withTransformers({
+    uppercase: (value: string) => value.toUpperCase(),
+    lowercase: (value: string) => value.toLowerCase(),
+    formatDate: (value: Date) => value.toLocaleDateString('en-US'),
+    fullName: (value: { firstName: string; lastName: string }) => 
+      `${value.firstName} ${value.lastName}`
+  })
+  .column('email', {
+    key: 'email',
+    transform: 'lowercase' // Reference by name
+  })
+  .build()
+```
+
+## Using Transformers
+
+### Named Transformers
+
+Reference registered transformers by name:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .withTransformers({
+    uppercase: (value: string) => value.toUpperCase()
+  })
+  .column('name', {
+    key: 'firstName',
+    transform: 'uppercase' // Type-safe: only registered transformer names allowed
+  })
+  .build()
+```
+
+<Note>
+Named transformers are type-checked. TypeScript will error if you reference a non-existent transformer or use it with an incompatible column type.
+</Note>
+
+### Inline Transformers
+
+Use inline functions for one-off transformations:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('email', {
+    key: 'email',
+    transform: (value: string, index: number) => {
+      return value.toLowerCase().trim()
+    }
+  })
+  .column('id', {
+    key: 'id',
+    transform: (value: number, index: number) => {
+      return `USER-${String(index).padStart(4, '0')}` // USER-0001, USER-0002, ...
+    }
+  })
+  .build()
+```
+
+<Tip>
+The `index` parameter is the row index (0-based), useful for generating sequential IDs or row numbers.
+</Tip>
+
+## Common Use Cases
+
+### String Transformations
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .withTransformers({
+    uppercase: (value: string) => value.toUpperCase(),
+    lowercase: (value: string) => value.toLowerCase(),
+    titleCase: (value: string) => 
+      value.replace(/\w\S*/g, (txt) => 
+        txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
+      ),
+    truncate: (value: string, maxLength: number = 50) => 
+      value.length > maxLength ? value.substring(0, maxLength) + '...' : value
+  })
+  .build()
+```
+
+### Date Transformations
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Order>()
+  .withTransformers({
+    formatDate: (value: Date) => value.toLocaleDateString('en-US'),
+    formatDateTime: (value: Date) => value.toLocaleString('en-US'),
+    dateOnly: (value: Date) => new Date(value.toDateString()),
+    relativeTime: (value: Date) => {
+      const days = Math.floor((Date.now() - value.getTime()) / (1000 * 60 * 60 * 24))
+      return days === 0 ? 'Today' : days === 1 ? 'Yesterday' : `${days} days ago`
+    }
+  })
+  .column('created', {
+    key: 'createdAt',
+    transform: 'formatDateTime'
+  })
+  .build()
+```
+
+### Number Transformations
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Product>()
+  .withTransformers({
+    toPercentage: (value: number) => value * 100,
+    round: (value: number, decimals: number = 2) => 
+      Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals),
+    formatCurrency: (value: number) => `$${value.toFixed(2)}`,
+    abbreviate: (value: number) => {
+      if (value >= 1e9) return `${(value / 1e9).toFixed(1)}B`
+      if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`
+      if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`
+      return value.toString()
+    }
+  })
+  .build()
+```
+
+### Array Transformations
+
+Transform arrays into multi-row cells:
+
+```typescript
+interface Order {
+  orderId: string
+  items: Array<{ name: string; quantity: number }>
+}
+
+const schema = ExcelSchemaBuilder.create<Order>()
+  .withTransformers({
+    itemNames: (items: Array<{ name: string; quantity: number }>) => 
+      items.map(item => item.name), // Returns array for multi-row cell
+    itemQuantities: (items: Array<{ name: string; quantity: number }>) => 
+      items.map(item => item.quantity),
+    joinArray: (items: string[]) => items.join(', ') // Single cell
+  })
+  .column('items', {
+    key: 'items',
+    transform: 'itemNames' // Creates multiple rows
+  })
+  .build()
+```
+
+<Info>
+When a transformer returns an array, each element is placed in a separate cell vertically, and other columns are merged to match the height.
+</Info>
+
+### Boolean Transformations
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .withTransformers({
+    yesNo: (value: boolean) => value ? 'Yes' : 'No',
+    checkMark: (value: boolean) => value ? '✓' : '✗',
+    activeStatus: (value: boolean) => value ? 'Active' : 'Inactive'
+  })
+  .column('is-active', {
+    key: 'isActive',
+    transform: 'yesNo'
+  })
+  .build()
+```
+
+## Type Safety
+
+Transformers are type-checked based on the column's extracted value type:
+
+```typescript
+interface User {
+  name: string
+  age: number
+}
+
+const schema = ExcelSchemaBuilder.create<User>()
+  .withTransformers({
+    uppercase: (value: string) => value.toUpperCase(),
+    double: (value: number) => value * 2
+  })
+  .column('name', {
+    key: 'name',
+    transform: 'uppercase' // ✓ Valid: name is string
+  })
+  .column('age', {
+    key: 'age',
+    transform: 'uppercase' // ❌ Error: age is number, transformer expects string
+  })
+  .column('age', {
+    key: 'age',
+    transform: 'double' // ✓ Valid: age is number
+  })
+  .build()
+```
+
+<Note>
+The library uses the `TypedTransformersMap` type (types.ts:79) to ensure only compatible transformers can be used with each column.
+</Note>
+
+## Transformer Resolution
+
+From the source code (`index.ts:84-90`):
+
+```typescript
+const columns = this.columns.map(column => column.type === 'column'
+  ? ({
+      ...column,
+      transform: typeof column.transform === 'string'
+        ? this.transformers[column.transform] // Resolve named transformer
+        : column.transform, // Use inline function
+    })
+  : column)
+```
+
+Named transformers are resolved at build time, converting string references to actual functions.
+
+## Handling Null and Undefined
+
+Transformers are called before default value handling. Handle null/undefined explicitly if needed:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .withTransformers({
+    safeUppercase: (value: string | null | undefined) => 
+      value ? value.toUpperCase() : '',
+    defaultZero: (value: number | null | undefined) => 
+      value ?? 0
+  })
+  .column('name', {
+    key: 'name',
+    transform: 'safeUppercase',
+    default: 'Unknown' // Applied after transformer if result is still null/undefined
+  })
+  .build()
+```
+
+Order of operations (from `utils.ts:78-91`):
+1. Extract value from data (key or function)
+2. Apply transformer (if specified)
+3. Apply default value (if result is null/undefined/empty/empty array)
+
+## Combining with Groups
+
+Transformers are inherited by column groups:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Report>()
+  .withTransformers({
+    uppercase: (value: string) => value.toUpperCase()
+  })
+  .group('group:dynamic', (builder, context: { addColumn: boolean }) => {
+    if (context.addColumn) {
+      builder.column('extra', {
+        key: 'extra',
+        transform: 'uppercase' // Can use parent schema's transformers
+      })
+    }
+  })
+  .build()
+```
+
+From `index.ts:70-72`, groups receive a new builder with inherited transformers and formatters.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Columns" icon="table-columns" href="/concepts/columns">
+    Learn about column configuration
+  </Card>
+  <Card title="Formatters" icon="palette" href="/concepts/formatters">
+    Format cell display in Excel
+  </Card>
+</CardGroup>

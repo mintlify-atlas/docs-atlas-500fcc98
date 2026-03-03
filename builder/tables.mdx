@@ -1,0 +1,335 @@
+---
+title: 'Tables'
+description: 'Add tables to sheets with schemas, data, and dynamic column selection'
+---
+
+## Adding Tables
+
+### addTable()
+
+Adds a table to the current sheet using a schema definition.
+
+```typescript
+addTable<
+  T extends GenericObject,
+  Schema extends ExcelSchema<T, any, string>,
+  ColKeys extends SchemaColumnKeys<Schema>,
+  SelectCols extends { [key in ColKeys]?: boolean } = {}
+>(table: SheetTable<T, Schema, ColKeys, SelectCols>): SheetTableBuilder
+```
+
+## SheetTable Configuration
+
+### Basic Structure
+
+```typescript
+interface SheetTable<T, Schema, ColumnKeys, SelectColsMap> {
+  title?: string
+  titleStyle?: CellStyle | ((data: T[]) => CellStyle)
+  schema: Schema
+  data: T[]
+  select?: SelectColsMap
+  context?: ExtractedContextMap
+  summary?: boolean
+}
+```
+
+<ParamField path="schema" type="ExcelSchema" required>
+  The schema defining columns and formatting. Created using `ExcelSchemaBuilder`.
+</ParamField>
+
+<ParamField path="data" type="T[]" required>
+  Array of data objects to populate the table. Type must match the schema's data type.
+</ParamField>
+
+<ParamField path="title" type="string">
+  Optional title displayed above the table. The title row spans all columns.
+</ParamField>
+
+<ParamField path="titleStyle" type="CellStyle | ((data: T[]) => CellStyle)">
+  Custom styling for the title cell. Can be static or dynamic based on data.
+</ParamField>
+
+<ParamField path="select" type="{ [key in ColumnKeys]?: boolean }">
+  Column selection map. Include/exclude specific columns from the schema.
+</ParamField>
+
+<ParamField path="context" type="ExtractedContextMap">
+  Context data for column groups. Required when using `group()` columns in the schema.
+</ParamField>
+
+<ParamField path="summary" type="boolean" default={true}>
+  Whether to display summary rows defined in column schemas.
+</ParamField>
+
+## Examples
+
+### Basic Table
+
+Add a table with all schema columns:
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+const buffer = ExcelBuilder.create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: userSchema,
+  })
+  .build({ output: 'buffer' })
+```
+
+### Table with Title
+
+Add a descriptive title to your table:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Reports')
+  .addTable({
+    title: 'Q1 2024 User Report',
+    data: users,
+    schema: userSchema,
+    titleStyle: {
+      font: { bold: true, sz: 16, color: { rgb: '1a73e8' } },
+      fill: { fgColor: { rgb: 'e8f0fe' } },
+    },
+  })
+```
+
+### Column Selection (Positive)
+
+Include only specific columns:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Users - Contact Info')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+    },
+  })
+```
+
+<Tip>
+  When using positive selection, only columns marked as `true` will be included.
+</Tip>
+
+### Column Selection (Negative)
+
+Exclude specific columns:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Users - Public Info')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: {
+      password: false,
+      ssn: false,
+      creditCard: false,
+    },
+  })
+```
+
+<Note>
+  When all selected values are `false`, the selection is treated as negative (exclude mode).
+</Note>
+
+### Dynamic Title Styling
+
+Style titles based on data:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Sales')
+  .addTable({
+    title: 'Sales Report',
+    titleStyle: (data) => ({
+      font: { bold: true, sz: 16 },
+      fill: {
+        fgColor: {
+          rgb: data.length > 100 ? '00ff00' : 'ffaa00' // Green if >100 rows
+        }
+      },
+    }),
+    data: salesData,
+    schema: salesSchema,
+  })
+```
+
+### Multiple Tables in a Sheet
+
+Add multiple tables to the same sheet:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Dashboard', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Active Users',
+    data: activeUsers,
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true },
+  })
+  .addTable({
+    title: 'Pending Users',
+    data: pendingUsers,
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true },
+  })
+  .addTable({
+    title: 'Inactive Users',
+    data: inactiveUsers,
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true },
+  })
+```
+
+### Using Column Groups with Context
+
+Provide context for dynamic column groups:
+
+```typescript
+interface Organization {
+  id: number
+  name: string
+}
+
+interface User {
+  id: number
+  name: string
+  organizations: Organization[]
+}
+
+const userSchema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('name', { key: 'name' })
+  .group('group:orgs', (builder, context: Organization[]) => {
+    for (const org of context) {
+      builder.column(`org-${org.id}`, {
+        label: `Member of ${org.name}`,
+        key: 'organizations',
+        transform: (orgs) => orgs.some(o => o.id === org.id) ? 'YES' : 'NO',
+      })
+    }
+  })
+  .build()
+
+const organizations: Organization[] = [
+  { id: 1, name: 'Engineering' },
+  { id: 2, name: 'Marketing' },
+  { id: 3, name: 'Sales' },
+]
+
+ExcelBuilder.create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    context: {
+      'group:orgs': organizations,
+    },
+  })
+```
+
+<Note>
+  The context object is type-safe. TypeScript will require context for any column groups defined in your schema.
+</Note>
+
+### Disable Summary Rows
+
+Omit summary calculations:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Transactions')
+  .addTable({
+    data: transactions,
+    schema: transactionSchema,
+    summary: false, // No summary rows
+  })
+```
+
+## Multiple Tables Example
+
+Here's a complete example with multiple sheets and tables:
+
+```typescript
+const buffer = ExcelBuilder.create()
+  .sheet('Users - Full')
+  .addTable({
+    title: 'All User Data',
+    data: users,
+    schema: userSchema,
+  })
+  .sheet('Users - Partial')
+  .addTable({
+    title: 'Contact Information',
+    data: users,
+    schema: userSchema,
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+    },
+  })
+  .sheet('Multi-table Grid', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Active Users',
+    data: users.filter(u => u.status === 'active'),
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true },
+  })
+  .addTable({
+    title: 'Inactive Users',
+    data: users.filter(u => u.status === 'inactive'),
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true },
+  })
+  .build({ output: 'buffer' })
+```
+
+## Type Safety
+
+The `addTable()` method is fully type-safe:
+
+- **Data Type**: Must match the schema's data type
+- **Column Selection**: Only allows keys that exist in the schema
+- **Context**: Required when schema has column groups, typed to match group context types
+- **Schema**: Fully typed based on `ExcelSchemaBuilder` definition
+
+```typescript
+// ✅ Correct
+.addTable({
+  data: users,
+  schema: userSchema,
+  select: { firstName: true }, // Valid column
+})
+
+// ❌ TypeScript Error
+.addTable({
+  data: users,
+  schema: userSchema,
+  select: { invalidColumn: true }, // Not in schema
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Layouts" icon="grid" href="/builder/layouts">
+    Learn about grid and linear layouts
+  </Card>
+  <Card title="Build Output" icon="file-export" href="/builder/build">
+    Generate the final Excel file
+  </Card>
+</CardGroup>

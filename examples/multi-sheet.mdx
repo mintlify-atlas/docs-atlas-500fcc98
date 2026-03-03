@@ -1,0 +1,372 @@
+---
+title: 'Multi-Sheet Workbooks'
+description: 'Create Excel workbooks with multiple sheets and tables using grid or linear layouts'
+---
+
+## Overview
+
+This example shows how to create complex Excel workbooks with:
+
+- Multiple sheets in a single workbook
+- Multiple tables within a single sheet
+- Grid layout for organizing tables side-by-side
+- Column selection for different data views
+- Sheet-specific configurations
+
+## Basic Multi-Sheet Export
+
+Create a workbook with multiple sheets, each containing different data:
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users - Full')
+  .addTable({
+    data: users,
+    schema: userSchema,
+  })
+  .sheet('Users - Summary')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true,
+    },
+  })
+  .sheet('Users - Detailed')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: {
+      firstName: false,
+      lastName: false,
+    },
+  })
+  .build({ output: 'buffer' })
+```
+
+<Note>
+  Each call to `.sheet()` creates a new sheet. You can chain multiple `.addTable()` calls to add tables to the current sheet.
+</Note>
+
+## Column Selection
+
+Control which columns appear in each table using the `select` option:
+
+### Positive Selection (Include Only)
+
+```typescript
+.addTable({
+  data: users,
+  schema: userSchema,
+  select: {
+    firstName: true,
+    lastName: true,
+    email: true,
+    createdAt: true,
+  },
+})
+```
+
+### Negative Selection (Exclude)
+
+```typescript
+.addTable({
+  data: users,
+  schema: userSchema,
+  select: {
+    firstName: false,
+    lastName: false,
+    email: false,
+  },
+})
+```
+
+<Tip>
+  Use positive selection when you want only a few specific columns, and negative selection when you want most columns except a few.
+</Tip>
+
+## Multiple Tables Per Sheet
+
+Add multiple tables to a single sheet with a linear layout:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Multiple Tables')
+  .addTable({
+    title: 'Active Users',
+    data: users.filter(u => u.active),
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true },
+  })
+  .addTable({
+    title: 'Inactive Users',
+    data: users.filter(u => !u.active),
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true },
+  })
+  .build({ output: 'buffer' })
+```
+
+<Note>
+  Tables are stacked vertically by default with a separator row between them. Use the `title` property to add a header for each table.
+</Note>
+
+## Grid Layout
+
+Arrange multiple tables side-by-side using a grid layout:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Grid Layout', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Q1 Results',
+    data: q1Users,
+    schema: userSchema,
+    select: { firstName: true, lastName: true, balance: true },
+  })
+  .addTable({
+    title: 'Q2 Results',
+    data: q2Users,
+    schema: userSchema,
+    select: { firstName: true, lastName: true, balance: true },
+  })
+  .addTable({
+    title: 'Q3 Results',
+    data: q3Users,
+    schema: userSchema,
+    select: { firstName: true, lastName: true, balance: true },
+  })
+  .addTable({
+    title: 'Q4 Results',
+    data: q4Users,
+    schema: userSchema,
+    select: { firstName: true, lastName: true, balance: true },
+  })
+  .build({ output: 'buffer' })
+```
+
+The `tablesPerRow: 2` parameter creates a 2-column grid:
+
+```
+┌─────────────┬─────────────┐
+│ Q1 Results  │ Q2 Results  │
+├─────────────┼─────────────┤
+│ Q3 Results  │ Q4 Results  │
+└─────────────┴─────────────┘
+```
+
+<Tip>
+  Grid layouts are perfect for comparing data side-by-side, such as quarterly reports, department comparisons, or before/after scenarios.
+</Tip>
+
+## Sheet Configuration
+
+Customize sheet behavior with configuration options:
+
+```typescript
+.sheet('Custom Sheet', { 
+  tablesPerRow: 3,
+  tableSeparatorWidth: 25,
+})
+```
+
+Available sheet parameters:
+
+- `tablesPerRow`: Number of tables per row in grid layout (default: 1 for linear)
+- `tableSeparatorWidth`: Width of separator columns between tables (default: 25)
+
+## Complete Multi-Sheet Example
+
+Here's a complete example with multiple sheets and layouts:
+
+```typescript
+import fs from 'node:fs'
+import { ExcelBuilder, ExcelSchemaBuilder } from '@chronicstone/typed-xlsx'
+
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  balance: number
+  createdAt: Date
+}
+
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .column('balance', { 
+    key: 'balance', 
+    format: '"$"#,##0.00' 
+  })
+  .column('createdAt', { 
+    key: 'createdAt', 
+    format: 'd mmm yyyy' 
+  })
+  .build()
+
+const users: User[] = [
+  {
+    id: 1,
+    firstName: 'John',
+    lastName: 'Doe',
+    email: 'john@example.com',
+    balance: 15000,
+    createdAt: new Date('2023-01-15'),
+  },
+  {
+    id: 2,
+    firstName: 'Jane',
+    lastName: 'Smith',
+    email: 'jane@example.com',
+    balance: 22500,
+    createdAt: new Date('2023-02-20'),
+  },
+  // ... more users
+]
+
+const buffer = ExcelBuilder
+  .create()
+  // Full data export
+  .sheet('All Users')
+  .addTable({
+    data: users,
+    schema,
+  })
+  // Summary view with selected columns
+  .sheet('Summary')
+  .addTable({
+    data: users,
+    schema,
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true,
+    },
+  })
+  // Detailed view excluding contact info
+  .sheet('Financial Details')
+  .addTable({
+    data: users,
+    schema,
+    select: {
+      email: false,
+    },
+  })
+  // Multiple tables in grid layout
+  .sheet('Quarterly Breakdown', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Q1 2024',
+    data: users.filter((_, i) => i < 5),
+    schema,
+    select: { firstName: true, lastName: true, balance: true },
+  })
+  .addTable({
+    title: 'Q2 2024',
+    data: users.filter((_, i) => i >= 5 && i < 10),
+    schema,
+    select: { firstName: true, lastName: true, balance: true },
+  })
+  .addTable({
+    title: 'Q3 2024',
+    data: users.filter((_, i) => i >= 10 && i < 15),
+    schema,
+    select: { firstName: true, lastName: true, balance: true },
+  })
+  .addTable({
+    title: 'Q4 2024',
+    data: users.filter((_, i) => i >= 15),
+    schema,
+    select: { firstName: true, lastName: true, balance: true },
+  })
+  .build({ output: 'buffer' })
+
+fs.writeFileSync('multi-sheet-users.xlsx', buffer)
+```
+
+## Build Options
+
+Customize the final output with build options:
+
+```typescript
+.build({ 
+  output: 'buffer',      // 'buffer' | 'base64' | 'array' | 'workbook'
+  bordered: true,        // Add borders to cells (default: true)
+  rowHeight: 30,         // Row height in pixels (default: 30)
+  extraLength: 5,        // Extra padding for column width (default: 5)
+  rtl: false,            // Right-to-left layout (default: false)
+})
+```
+
+<Note>
+  The `workbook` output type returns the raw xlsx-js-style workbook object, allowing for further customization before writing to file.
+</Note>
+
+## Use Cases
+
+### Departmental Reports
+
+Create separate sheets for each department:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Sales')
+  .addTable({ data: salesUsers, schema })
+  .sheet('Marketing')
+  .addTable({ data: marketingUsers, schema })
+  .sheet('Engineering')
+  .addTable({ data: engineeringUsers, schema })
+  .build({ output: 'buffer' })
+```
+
+### Comparison Views
+
+Compare different data sets side-by-side:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Before vs After', { tablesPerRow: 2 })
+  .addTable({ 
+    title: 'Before Changes',
+    data: dataBefore, 
+    schema 
+  })
+  .addTable({ 
+    title: 'After Changes',
+    data: dataAfter, 
+    schema 
+  })
+  .build({ output: 'buffer' })
+```
+
+### Progressive Detail
+
+Provide different levels of detail across sheets:
+
+```typescript
+ExcelBuilder.create()
+  .sheet('Overview')
+  .addTable({
+    data: users,
+    schema,
+    select: { firstName: true, lastName: true, balance: true },
+  })
+  .sheet('Detailed')
+  .addTable({ data: users, schema })
+  .build({ output: 'buffer' })
+```
+
+## Next Steps
+
+- Learn about [custom formatters](/schema/formatters) for consistent styling
+- Explore [dynamic column groups](/examples/user-data#dynamic-column-groups) for runtime column generation
+- See the [ExcelBuilder API reference](/api/excel-builder) for all configuration options

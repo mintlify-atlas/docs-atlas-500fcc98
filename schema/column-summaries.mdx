@@ -1,0 +1,361 @@
+---
+title: 'Column Summaries'
+description: 'Add computed summary rows to your Excel columns'
+---
+
+## Overview
+
+Column summaries allow you to add computed aggregate rows at the bottom of your data tables. Each column can have multiple summary rows with custom calculations, formatting, and styling.
+
+## Basic Usage
+
+Add a `summary` array to your column definition:
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00',
+    summary: [
+      {
+        value: (data) => data.reduce((sum, user) => sum + user.balance, 0)
+      }
+    ]
+  })
+  .build()
+```
+
+## Summary Configuration
+
+Each summary object in the array supports the following properties:
+
+### `value` (required)
+
+A function that receives all row data and returns the computed summary value.
+
+<ParamField path="value" type="(data: T[]) => BaseCellValue" required>
+  Function that computes the summary value from the entire dataset.
+</ParamField>
+
+```ts
+summary: [
+  {
+    value: (data) => data.reduce((sum, user) => sum + user.balance, 0)
+  }
+]
+```
+
+### `format`
+
+Excel number format or formatter preset for the summary cell.
+
+<ParamField path="format" type="string | Preset | ((data: T[]) => string | Preset)">
+  Format string or function that returns a format based on the data.
+</ParamField>
+
+**Static Format:**
+```ts
+summary: [
+  {
+    value: (data) => data.reduce((sum, user) => sum + user.balance, 0),
+    format: '"$"#,##0.00_);\\("$"#,##0.00\\)' // Currency format
+  }
+]
+```
+
+**Dynamic Format:**
+```ts
+summary: [
+  {
+    value: (data) => data.reduce((sum, user) => sum + user.balance, 0),
+    format: (data) => {
+      const total = data.reduce((sum, user) => sum + user.balance, 0)
+      return total > 10000 ? '"$"#,##0.00' : '#,##0.00'
+    }
+  }
+]
+```
+
+### `cellStyle`
+
+Custom styling for the summary cell using xlsx-js-style `CellStyle` objects.
+
+<ParamField path="cellStyle" type="CellStyle | ((data: T[]) => CellStyle)">
+  Cell style object or function that returns a style based on the data.
+</ParamField>
+
+**Static Style:**
+```ts
+summary: [
+  {
+    value: (data) => data.length,
+    cellStyle: {
+      font: { bold: true, sz: 14 },
+      fill: { fgColor: { rgb: 'FFFF00' } }
+    }
+  }
+]
+```
+
+**Dynamic Style:**
+```ts
+summary: [
+  {
+    value: (data) => data.reduce((sum, user) => sum + user.balance, 0),
+    cellStyle: (data) => {
+      const total = data.reduce((sum, user) => sum + user.balance, 0)
+      return {
+        font: {
+          color: { rgb: total > 10000 ? '00FF00' : 'FF0000' }
+        }
+      }
+    }
+  }
+]
+```
+
+## Multiple Summary Rows
+
+You can add multiple summary rows by providing multiple objects in the `summary` array:
+
+```ts
+interface User {
+  id: number
+  balance: number
+  taxRate: number
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', {
+    key: 'id',
+    summary: [
+      { value: () => 'SUBTOTAL' },
+      { value: () => 'TOTAL' }
+    ]
+  })
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00',
+    summary: [
+      {
+        value: (data) => data.reduce((sum, user) => sum + user.balance, 0),
+        format: '"$"#,##0.00_);\\("$"#,##0.00\\)'
+      },
+      {
+        value: (data) => {
+          const subtotal = data.reduce((sum, user) => sum + user.balance, 0)
+          const avgTaxRate = data.reduce((sum, user) => sum + user.taxRate, 0) / data.length
+          return subtotal * (1 + avgTaxRate)
+        },
+        format: '"$"#,##0.00_);\\("$"#,##0.00\\)',
+        cellStyle: {
+          font: { bold: true, sz: 12 },
+          fill: { fgColor: { rgb: 'CCCCCC' } }
+        }
+      }
+    ]
+  })
+  .build()
+```
+
+## Common Summary Patterns
+
+### Sum
+
+```ts
+summary: [
+  {
+    value: (data) => data.reduce((sum, row) => sum + row.amount, 0),
+    format: '"$"#,##0.00'
+  }
+]
+```
+
+### Average
+
+```ts
+summary: [
+  {
+    value: (data) => {
+      const sum = data.reduce((acc, row) => acc + row.score, 0)
+      return sum / data.length
+    },
+    format: '0.00'
+  }
+]
+```
+
+### Count
+
+```ts
+summary: [
+  {
+    value: (data) => data.length,
+    format: '#,##0'
+  }
+]
+```
+
+### Conditional Count
+
+```ts
+summary: [
+  {
+    value: (data) => data.filter(row => row.status === 'active').length,
+    format: '#,##0 "active users"'
+  }
+]
+```
+
+### Min/Max
+
+```ts
+summary: [
+  {
+    value: (data) => Math.max(...data.map(row => row.score)),
+    format: '"Max: "0.00'
+  }
+]
+```
+
+### Percentage
+
+```ts
+summary: [
+  {
+    value: (data) => {
+      const passed = data.filter(row => row.passed).length
+      return passed / data.length
+    },
+    format: '0.0%'
+  }
+]
+```
+
+## Complete Example
+
+```ts
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  balance: number
+  results: {
+    general: { overall: number }
+    technical: { overall: number }
+  }
+}
+
+const userExportSchema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', {
+    key: 'id',
+    summary: [
+      { value: () => 'SUBTOTAL' },
+      { value: () => 'TOTAL (with fees)' }
+    ]
+  })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00',
+    summary: [
+      {
+        value: (data) => data.reduce((sum, user) => sum + user.balance, 0),
+        format: '"$"#,##0.00_);\\("$"#,##0.00\\)'
+      },
+      {
+        value: (data) => {
+          const subtotal = data.reduce((sum, user) => sum + user.balance, 0)
+          return subtotal * 1.2 // 20% fee
+        },
+        format: '"$"#,##0.00_);\\("$"#,##0.00\\)',
+        cellStyle: {
+          font: { bold: true },
+          fill: { fgColor: { rgb: 'CCCCCC' } }
+        }
+      }
+    ]
+  })
+  .column('generalScore', {
+    key: 'results.general.overall',
+    format: '# / 10',
+    summary: [
+      {
+        value: (data) => {
+          const sum = data.reduce((acc, user) => acc + user.results.general.overall, 0)
+          return sum / data.length
+        },
+        format: '"Avg: "0.0 " / 10"'
+      }
+    ]
+  })
+  .column('technicalScore', {
+    key: 'results.technical.overall',
+    format: '# / 10',
+    summary: [
+      {
+        value: (data) => {
+          const sum = data.reduce((acc, user) => acc + user.results.technical.overall, 0)
+          return sum / data.length
+        },
+        format: '"Avg: "0.0 " / 10"'
+      }
+    ]
+  })
+  .build()
+```
+
+## Default Summary Styling
+
+Summary cells automatically receive default styling:
+
+- **Bold font**
+- **Light gray background** (`rgb: 'E9E9E9'`)
+- **Vertical center alignment**
+
+You can override these defaults using the `cellStyle` property.
+
+<Note>
+  All columns in a table must have the same number of summary rows. If a column doesn't need a summary for a particular row, provide an empty summary object or omit the `summary` property entirely.
+</Note>
+
+## Controlling Summary Display
+
+When building a table, you can control whether summaries are displayed using the `summary` parameter:
+
+```ts
+ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: userExportSchema,
+    summary: false // Hide summary rows
+  })
+  .build({ output: 'buffer' })
+```
+
+<Warning>
+  Summary rows are calculated from **all data** in the table, not just visible rows. If you filter data before exporting, ensure the summary calculations reflect the filtered dataset.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Define Columns" icon="table-columns" href="/schema/define-columns">
+    Learn about basic column definitions
+  </Card>
+  <Card title="Transformers" icon="wand-magic-sparkles" href="/schema/transformers">
+    Transform data values before export
+  </Card>
+  <Card title="Formatters" icon="paintbrush" href="/schema/formatters">
+    Apply Excel number formats and presets
+  </Card>
+  <Card title="Build Schema" icon="hammer" href="/schema/build">
+    Finalize and use your schema
+  </Card>
+</CardGroup>

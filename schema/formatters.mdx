@@ -1,0 +1,419 @@
+---
+title: 'Formatters'
+description: 'Apply Excel number formats and reusable formatting presets'
+---
+
+## Overview
+
+Formatters control how cell values are displayed in Excel using Excel's native number format syntax. They enable you to format numbers as currency, percentages, dates, and more without changing the underlying cell values.
+
+## Format vs Transform
+
+It's important to understand the difference:
+
+- **Transformers**: Change the actual cell value (e.g., convert `0.5` to `50`)
+- **Formatters**: Change how the value is displayed in Excel (e.g., display `0.5` as "50%")
+
+```ts
+// Using transformer (changes value)
+.column('score', {
+  key: 'score',
+  transform: (value) => value * 100, // 0.5 becomes 50
+  format: '0.00'                      // Displays as "50.00"
+})
+
+// Using formatter only (value unchanged)
+.column('score', {
+  key: 'score',        // Value is 0.5
+  format: '0.00%'      // Displays as "50.00%"
+})
+```
+
+## Basic Usage
+
+Apply formats directly to columns using Excel's number format syntax:
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00_);\\("$"#,##0.00\\)' // Currency
+  })
+  .column('createdAt', {
+    key: 'createdAt',
+    format: 'd mmm yyyy' // Date
+  })
+  .column('score', {
+    key: 'score',
+    format: '0.00%' // Percentage
+  })
+  .build()
+```
+
+## Excel Number Format Syntax
+
+Excel formats use a special syntax with up to 4 sections separated by semicolons:
+
+```
+[Positive];[Negative];[Zero];[Text]
+```
+
+### Common Format Patterns
+
+| Format | Example Input | Display Output |
+|--------|--------------|----------------|
+| `0` | 1234.5 | 1235 |
+| `0.00` | 1234.5 | 1234.50 |
+| `#,##0` | 1234.5 | 1,235 |
+| `#,##0.00` | 1234.5 | 1,234.50 |
+| `0.0%` | 0.5 | 50.0% |
+| `"$"#,##0.00` | 1234.5 | $1,234.50 |
+| `d/m/yyyy` | Date | 15/3/2024 |
+| `mmm d, yyyy` | Date | Mar 15, 2024 |
+| `0.00E+00` | 1234 | 1.23E+03 |
+
+### Format Symbols
+
+- `0` - Digit placeholder (shows 0 if no digit)
+- `#` - Digit placeholder (shows nothing if no digit)
+- `.` - Decimal point
+- `,` - Thousands separator
+- `%` - Percentage (multiplies by 100)
+- `"text"` - Literal text
+- `@` - Text placeholder
+- `[Color]` - Color code (e.g., `[Red]`, `[Blue]`)
+
+## Currency Formats
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00_);\\("$"#,##0.00\\)' // $1,234.50 or ($1,234.50)
+  })
+  .column('euros', {
+    key: 'amount',
+    format: '€#,##0.00' // €1,234.50
+  })
+  .column('pounds', {
+    key: 'amount',
+    format: '"£"#,##0.00' // £1,234.50
+  })
+  .build()
+```
+
+## Date and Time Formats
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('createdAt', {
+    key: 'createdAt',
+    format: 'd mmm yyyy' // 15 Mar 2024
+  })
+  .column('updatedAt', {
+    key: 'updatedAt',
+    format: 'mm/dd/yyyy' // 03/15/2024
+  })
+  .column('timestamp', {
+    key: 'timestamp',
+    format: 'd mmm yyyy h:mm AM/PM' // 15 Mar 2024 2:30 PM
+  })
+  .column('time', {
+    key: 'time',
+    format: 'h:mm:ss' // 14:30:45
+  })
+  .build()
+```
+
+### Date Format Codes
+
+- `d` - Day (1-31)
+- `dd` - Day with leading zero (01-31)
+- `ddd` - Day abbreviation (Mon, Tue)
+- `dddd` - Full day name (Monday, Tuesday)
+- `m` - Month (1-12)
+- `mm` - Month with leading zero (01-12)
+- `mmm` - Month abbreviation (Jan, Feb)
+- `mmmm` - Full month name (January, February)
+- `yy` - Two-digit year (24)
+- `yyyy` - Four-digit year (2024)
+- `h` - Hour (0-23)
+- `hh` - Hour with leading zero (00-23)
+- `m` - Minute (0-59) *when used with time*
+- `mm` - Minute with leading zero (00-59)
+- `s` - Second (0-59)
+- `ss` - Second with leading zero (00-59)
+- `AM/PM` - 12-hour time format
+
+## Percentage Formats
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('conversionRate', {
+    key: 'conversionRate',
+    format: '0.00%' // 0.156 displays as 15.60%
+  })
+  .column('growthRate', {
+    key: 'growthRate',
+    format: '+0.0%;-0.0%;0%' // +5.5%, -3.2%, or 0%
+  })
+  .build()
+```
+
+<Note>
+  The `%` symbol in formats automatically multiplies the value by 100. A value of `0.5` with format `0%` displays as "50%".
+</Note>
+
+## Custom Text Formats
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('score', {
+    key: 'score',
+    format: '# " / 10"' // 8 / 10
+  })
+  .column('count', {
+    key: 'count',
+    format: '#,##0 " users"' // 1,234 users
+  })
+  .column('status', {
+    key: 'statusCode',
+    format: '[Green]"PASS";[Red]"FAIL"' // Green PASS or Red FAIL
+  })
+  .build()
+```
+
+## Formatter Presets
+
+For reusable formats, define formatter presets:
+
+```ts
+import { FormattersMap } from '@chronicstone/typed-xlsx'
+
+const formatters = {
+  currency: '"$"#,##0.00_);\\("$"#,##0.00\\)',
+  percentage: '0.00%',
+  date: 'd mmm yyyy',
+  datetime: 'd mmm yyyy h:mm AM/PM',
+  score: '# " / 10"',
+} satisfies FormattersMap
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .withFormatters(formatters)
+  .column('balance', {
+    key: 'balance',
+    format: { preset: 'currency' } // Use preset
+  })
+  .column('score', {
+    key: 'score',
+    format: { preset: 'score' }
+  })
+  .build()
+```
+
+### Method Signature
+
+```ts
+withFormatters<Formatters extends FormattersMap>(
+  formatters: Formatters
+): ExcelSchemaBuilder<T, KeyPaths, UsedKeys, TransformMap, FormatMap & Formatters, ContextMap>
+```
+
+<ParamField path="formatters" type="FormattersMap" required>
+  Object mapping formatter preset names to Excel format strings or formatter functions.
+</ParamField>
+
+## Dynamic Formatters
+
+Formatters can be functions that compute formats at runtime:
+
+```ts
+const formatters = {
+  dynamicCurrency: (params: { symbol: string }) => `"${params.symbol}"#,##0.00`,
+} satisfies FormattersMap
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .withFormatters(formatters)
+  .column('balance', {
+    key: 'balance',
+    format: {
+      preset: 'dynamicCurrency',
+      params: { symbol: '€' } // €1,234.50
+    }
+  })
+  .build()
+```
+
+### Dynamic Format per Row
+
+You can also use a function directly in the column definition:
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('amount', {
+    key: 'amount',
+    format: (rowData, rowIndex, subRowIndex) => {
+      return rowData.currency === 'USD'
+        ? '"$"#,##0.00'
+        : '"€"#,##0.00'
+    }
+  })
+  .build()
+```
+
+## Conditional Formatting
+
+Use conditional sections to apply different formats based on value:
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('balance', {
+    key: 'balance',
+    // Positive: green with +, Negative: red in parentheses, Zero: gray dash
+    format: '[Green]"+"#,##0.00;[Red]"("#,##0.00")";[Gray]"-"'
+  })
+  .column('change', {
+    key: 'change',
+    // >0: green +%, <0: red %, =0: gray 0%
+    format: '[Green]"+"0.00%;[Red]0.00%;[Gray]"0%"'
+  })
+  .build()
+```
+
+## Formatting in Summary Rows
+
+Apply formats to summary cells:
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00',
+    summary: [
+      {
+        value: (data) => data.reduce((sum, user) => sum + user.balance, 0),
+        format: '"Total: $"#,##0.00_);\\("$"#,##0.00\\)'
+      }
+    ]
+  })
+  .column('score', {
+    key: 'score',
+    format: '# / 10',
+    summary: [
+      {
+        value: (data) => {
+          const sum = data.reduce((acc, user) => acc + user.score, 0)
+          return sum / data.length
+        },
+        format: '"Avg: "0.0 " / 10"'
+      }
+    ]
+  })
+  .build()
+```
+
+## Complete Example
+
+```ts
+import { ExcelSchemaBuilder, FormattersMap } from '@chronicstone/typed-xlsx'
+
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  balance: number
+  conversionRate: number
+  score: number
+  createdAt: Date
+  lastLogin: Date
+}
+
+const formatters = {
+  currency: '"$"#,##0.00_);\\("$"#,##0.00\\)',
+  percentage: '0.00%',
+  date: 'd mmm yyyy',
+  datetime: 'd mmm yyyy h:mm AM/PM',
+  score: '# " / 10"',
+} satisfies FormattersMap
+
+const userExportSchema = ExcelSchemaBuilder
+  .create<User>()
+  .withFormatters(formatters)
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('balance', {
+    key: 'balance',
+    format: { preset: 'currency' },
+    summary: [
+      {
+        value: (data) => data.reduce((sum, user) => sum + user.balance, 0),
+        format: { preset: 'currency' }
+      }
+    ]
+  })
+  .column('conversionRate', {
+    key: 'conversionRate',
+    format: { preset: 'percentage' }
+  })
+  .column('score', {
+    key: 'score',
+    format: { preset: 'score' },
+    summary: [
+      {
+        value: (data) => {
+          const sum = data.reduce((acc, user) => acc + user.score, 0)
+          return sum / data.length
+        },
+        format: '"Avg: "0.0 " / 10"'
+      }
+    ]
+  })
+  .column('createdAt', {
+    key: 'createdAt',
+    format: { preset: 'date' }
+  })
+  .column('lastLogin', {
+    key: 'lastLogin',
+    format: { preset: 'datetime' }
+  })
+  .build()
+```
+
+<Warning>
+  Excel format strings require specific escaping for special characters. Use `\\` to escape backslashes and quotes within format strings.
+</Warning>
+
+## Format Resources
+
+For more Excel number format patterns:
+
+- [Microsoft Excel Number Format Documentation](https://support.microsoft.com/en-us/office/number-format-codes-5026bbd6-04bc-48cd-bf33-80f18b4eae68)
+- [ExcelJet Custom Number Formats](https://exceljet.net/custom-number-formats)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Transformers" icon="wand-magic-sparkles" href="/schema/transformers">
+    Transform data values before applying formats
+  </Card>
+  <Card title="Define Columns" icon="table-columns" href="/schema/define-columns">
+    Learn about column definitions and options
+  </Card>
+  <Card title="Column Summaries" icon="calculator" href="/schema/column-summaries">
+    Apply formats to summary rows
+  </Card>
+  <Card title="Build Schema" icon="hammer" href="/schema/build">
+    Finalize and use your schema
+  </Card>
+</CardGroup>

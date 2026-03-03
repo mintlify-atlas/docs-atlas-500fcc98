@@ -1,0 +1,292 @@
+---
+title: 'Build Parameters'
+description: 'Type definitions for Excel workbook build configuration'
+---
+
+## ExcelBuildParams
+
+Configuration object for building Excel workbooks.
+
+### Type Definition
+
+```typescript
+export interface ExcelBuildParams<Output extends TOutputType> {
+  output: Output
+  rtl?: boolean
+  extraLength?: number
+  rowHeight?: number
+  bordered?: boolean
+}
+```
+
+### Type Parameters
+
+<ParamField path="Output" type="TOutputType">
+  The output format type (determines the return type)
+</ParamField>
+
+### Properties
+
+<ResponseField name="output" type="'buffer' | 'workbook' | 'base64' | 'file'" required>
+  Output format for the generated Excel file:
+  - `'buffer'`: Node.js Buffer object
+  - `'workbook'`: XLSX WorkBook object (for further manipulation)
+  - `'base64'`: Base64-encoded string
+  - `'file'`: File object
+</ResponseField>
+
+<ResponseField name="rtl" type="boolean" default="false">
+  Enable right-to-left text direction for languages like Arabic and Hebrew.
+  
+  When `true`:
+  - Sheet view direction is set to RTL
+  - Text alignment defaults to right
+  - Column order is reversed in the UI
+</ResponseField>
+
+<ResponseField name="extraLength" type="number" default="5">
+  Additional characters to add when auto-calculating column widths.
+  
+  Column widths are calculated based on content, then this value is added as padding.
+  
+  **Example:**
+  - Content width: 20 characters
+  - `extraLength: 5`
+  - Final width: 25 characters
+</ResponseField>
+
+<ResponseField name="rowHeight" type="number" default="30">
+  Default height in points for data rows.
+  
+  **Note:** Title rows (when a table has a title) always use 40 points, regardless of this setting.
+</ResponseField>
+
+<ResponseField name="bordered" type="boolean" default="true">
+  Whether to add borders to cells.
+  
+  When `true`, all cells have borders using the default Excel border style.
+</ResponseField>
+
+## TOutputType
+
+Union type of valid output formats.
+
+```typescript
+export type TOutputType = 'buffer' | 'workbook' | 'base64' | 'file'
+```
+
+## ExcelBuildOutput
+
+Utility type that maps output format to the corresponding return type.
+
+```typescript
+export type ExcelBuildOutput<Output extends TOutputType> =
+  Output extends 'workbook'
+    ? XLSX.WorkBook
+    : Output extends 'base64'
+      ? string
+      : Output extends 'buffer'
+        ? Buffer
+        : Output extends 'file'
+          ? File
+          : never
+```
+
+### Type Mapping
+
+| Output Format | Return Type | Use Case |
+|--------------|-------------|----------|
+| `'buffer'` | `Buffer` | Server-side file writing, HTTP responses |
+| `'workbook'` | `XLSX.WorkBook` | Further manipulation with xlsx library |
+| `'base64'` | `string` | Embedding in emails, data URIs |
+| `'file'` | `File` | Browser file download, FormData |
+
+## Usage Examples
+
+### Buffer Output (Node.js)
+
+```typescript
+import { ExcelBuilder } from 'typed-xlsx'
+import fs from 'fs'
+
+const buffer = ExcelBuilder.create()
+  .sheet('data')
+  .addTable({ schema, data })
+  .build({
+    output: 'buffer',
+    bordered: true,
+    rowHeight: 30
+  })
+
+// buffer is of type: Buffer
+fs.writeFileSync('output.xlsx', buffer)
+```
+
+### Base64 Output
+
+```typescript
+const base64 = excel.build({
+  output: 'base64',
+  bordered: false
+})
+
+// base64 is of type: string
+console.log(base64) // "UEsDBBQABgAIAAAA..."
+
+// Use in data URI
+const dataUri = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`
+```
+
+### WorkBook Output
+
+```typescript
+import XLSX from 'xlsx-js-style'
+
+const workbook = excel.build({
+  output: 'workbook'
+})
+
+// workbook is of type: XLSX.WorkBook
+// Further manipulate with xlsx library
+workbook.Props = {
+  Title: 'My Report',
+  Author: 'John Doe',
+  CreatedDate: new Date()
+}
+
+XLSX.writeFile(workbook, 'output.xlsx')
+```
+
+### RTL Support
+
+```typescript
+const buffer = excel.build({
+  output: 'buffer',
+  rtl: true, // Enable RTL for Arabic/Hebrew
+  bordered: true
+})
+```
+
+### Custom Row Heights
+
+```typescript
+const buffer = excel.build({
+  output: 'buffer',
+  rowHeight: 40, // Taller rows for better readability
+  extraLength: 8 // More padding for column widths
+})
+```
+
+### Borderless Style
+
+```typescript
+const buffer = excel.build({
+  output: 'buffer',
+  bordered: false // Clean, borderless look
+})
+```
+
+## HTTP Response Example
+
+```typescript
+import express from 'express'
+
+app.get('/export', (req, res) => {
+  const excel = ExcelBuilder.create()
+    .sheet('orders')
+    .addTable({ schema: orderSchema, data: orders })
+    .build({ output: 'buffer' })
+  
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  )
+  res.setHeader(
+    'Content-Disposition',
+    'attachment; filename="orders.xlsx"'
+  )
+  res.send(excel)
+})
+```
+
+## Column Width Calculation
+
+Column widths are calculated automatically based on:
+1. Header text length
+2. Content text length (sampling rows)
+3. Applied number formats
+
+The `extraLength` parameter adds padding:
+
+```typescript
+// Minimal padding
+const tight = excel.build({ output: 'buffer', extraLength: 2 })
+
+// Default padding
+const normal = excel.build({ output: 'buffer', extraLength: 5 })
+
+// Generous padding
+const spacious = excel.build({ output: 'buffer', extraLength: 10 })
+```
+
+## SheetParams
+
+Sheet-level configuration (passed to `sheet()` method).
+
+```typescript
+export interface SheetParams {
+  tableSeparatorWidth?: number
+  tablesPerRow?: number
+}
+```
+
+<ResponseField name="tableSeparatorWidth" type="number" default="25">
+  Width in characters for the separator column between tables.
+  
+  When multiple tables are placed side-by-side on a sheet, this empty column separates them.
+</ResponseField>
+
+<ResponseField name="tablesPerRow" type="number">
+  Maximum number of tables per row before wrapping to the next row.
+  
+  When undefined, all tables are placed in a single row.
+</ResponseField>
+
+### Example
+
+```typescript
+const excel = ExcelBuilder.create()
+  .sheet('dashboard', {
+    tablesPerRow: 2,        // 2 tables per row
+    tableSeparatorWidth: 30 // 30 characters between tables
+  })
+  .addTable({ schema: schema1, data: data1, title: 'Table 1' })
+  .addTable({ schema: schema2, data: data2, title: 'Table 2' })
+  .addTable({ schema: schema3, data: data3, title: 'Table 3' })
+  // Layout:
+  // | Table 1 | [separator] | Table 2 |
+  // | Table 3 |                       |
+  .build({ output: 'buffer' })
+```
+
+## Type Safety
+
+The return type is automatically inferred from the `output` parameter:
+
+```typescript
+const buffer = excel.build({ output: 'buffer' })
+// buffer is type: Buffer
+
+const base64 = excel.build({ output: 'base64' })
+// base64 is type: string
+
+const workbook = excel.build({ output: 'workbook' })
+// workbook is type: XLSX.WorkBook
+```
+
+## See Also
+
+- [ExcelBuilder](/api/excel-builder) - Builder class methods
+- [SheetParams](#sheetparams) - Sheet-level configuration
+- [ExcelBuilder.sheet()](/api/excel-builder#sheet) - Defining sheets
+- [ExcelBuilder.build()](/api/excel-builder#build) - Building workbooks

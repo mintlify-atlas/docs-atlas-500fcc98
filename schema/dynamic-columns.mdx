@@ -1,0 +1,319 @@
+---
+title: 'Dynamic Column Groups'
+description: 'Generate columns dynamically at runtime based on contextual data'
+---
+
+## Overview
+
+Dynamic column groups allow you to generate columns at runtime based on contextual data. This is powerful for scenarios where the number and configuration of columns depends on external data that's only known when building the Excel file.
+
+## Why Use Dynamic Columns?
+
+Dynamic columns are ideal for:
+
+- **Variable Categories**: Creating columns for each category in a dynamic list
+- **Time-Series Data**: Generating columns for date ranges
+- **Multi-Dimensional Analysis**: Building columns based on combinations of filters
+- **User-Specific Exports**: Customizing columns based on user permissions or preferences
+
+## Basic Usage
+
+### Method Signature
+
+```ts
+group<K, Context>(
+  key: K,
+  handler: (builder: ExcelSchemaBuilder<T, KeyPaths>, context: Context) => void
+): ExcelSchemaBuilder<...>
+```
+
+<ParamField path="key" type="string" required>
+  Unique identifier for this group. Must start with `'group:'` prefix and be unique across the schema.
+</ParamField>
+
+<ParamField path="handler" type="function" required>
+  Callback function that receives a fresh schema builder and the runtime context. Use the builder to define columns dynamically.
+</ParamField>
+
+<ParamField path="context" type="Generic Type">
+  Runtime data passed when building the Excel file. The type is inferred and enforced when using the schema.
+</ParamField>
+
+## Simple Example
+
+```ts
+interface Organization {
+  id: number
+  name: string
+}
+
+interface User {
+  id: number
+  name: string
+  organizations: Organization[]
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('name', { key: 'name' })
+  .group('group:org', (builder, context: Organization[]) => {
+    // context is the list of organizations passed at build time
+    for (const org of context) {
+      builder.column(`org-${org.id}`, {
+        label: `Member of ${org.name}`,
+        key: 'organizations',
+        transform: (orgs) => orgs.some(o => o.id === org.id) ? 'YES' : 'NO'
+      })
+    }
+  })
+  .build()
+```
+
+## Using the Schema with Context
+
+When adding a table with dynamic columns, you **must** provide the context:
+
+```ts
+const organizations: Organization[] = [
+  { id: 1, name: 'Acme Corp' },
+  { id: 2, name: 'TechStart Inc' },
+  { id: 3, name: 'Global Solutions' }
+]
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: schema,
+    context: {
+      'group:org': organizations // ✅ Type-safe context
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+<Warning>
+  The context keys must exactly match the group keys defined in your schema. TypeScript will enforce this at compile time.
+</Warning>
+
+## Advanced Example: Organization Membership Matrix
+
+```ts
+interface Organization {
+  id: number
+  name: string
+  department: string
+}
+
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  organizations: Organization[]
+}
+
+const userExportSchema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .group('group:org', (builder, context: Organization[]) => {
+    for (const org of context) {
+      builder
+        .column(`org-${org.id}`, {
+          label: `${org.name} (${org.department})`,
+          key: 'organizations',
+          transform: (orgs) => orgs.some(o => o.id === org.id) ? 'YES' : 'NO',
+          cellStyle: (data) => ({
+            font: {
+              color: {
+                rgb: data.organizations.some(o => o.id === org.id)
+                  ? '61eb34' // Green for members
+                  : 'd10808'  // Red for non-members
+              }
+            },
+            alignment: { horizontal: 'center' }
+          })
+        })
+    }
+  })
+  .build()
+
+// Usage
+const organizations: Organization[] = [
+  { id: 1, name: 'Engineering', department: 'Tech' },
+  { id: 2, name: 'Sales', department: 'Business' },
+  { id: 3, name: 'Marketing', department: 'Business' }
+]
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('User Organization Matrix')
+  .addTable({
+    data: users,
+    schema: userExportSchema,
+    context: {
+      'group:org': organizations
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+## Multiple Dynamic Groups
+
+You can define multiple dynamic groups in a single schema:
+
+```ts
+interface Product {
+  id: number
+  name: string
+}
+
+interface Region {
+  id: number
+  name: string
+}
+
+interface SalesData {
+  salesRepId: number
+  salesRepName: string
+  productSales: Array<{ productId: number, amount: number }>
+  regionSales: Array<{ regionId: number, amount: number }>
+}
+
+const schema = ExcelSchemaBuilder
+  .create<SalesData>()
+  .column('salesRepId', { key: 'salesRepId' })
+  .column('salesRepName', { key: 'salesRepName' })
+  .group('group:products', (builder, context: Product[]) => {
+    for (const product of context) {
+      builder.column(`product-${product.id}`, {
+        label: product.name,
+        key: 'productSales',
+        transform: (sales) => {
+          const sale = sales.find(s => s.productId === product.id)
+          return sale?.amount ?? 0
+        },
+        format: '"$"#,##0.00'
+      })
+    }
+  })
+  .group('group:regions', (builder, context: Region[]) => {
+    for (const region of context) {
+      builder.column(`region-${region.id}`, {
+        label: region.name,
+        key: 'regionSales',
+        transform: (sales) => {
+          const sale = sales.find(s => s.regionId === region.id)
+          return sale?.amount ?? 0
+        },
+        format: '"$"#,##0.00'
+      })
+    }
+  })
+  .build()
+
+// Usage with multiple contexts
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Sales Report')
+  .addTable({
+    data: salesData,
+    schema: schema,
+    context: {
+      'group:products': products,  // ✅ Both contexts required
+      'group:regions': regions     // ✅ Type-safe
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+## Dynamic Groups with Transformers
+
+Dynamic groups inherit transformers and formatters from the parent schema:
+
+```ts
+const transformers = {
+  currency: (value: number) => value.toFixed(2),
+  percentage: (value: number) => `${(value * 100).toFixed(1)}%`
+}
+
+const schema = ExcelSchemaBuilder
+  .create<SalesData>()
+  .withTransformers(transformers)
+  .column('salesRepName', { key: 'salesRepName' })
+  .group('group:products', (builder, context: Product[]) => {
+    for (const product of context) {
+      builder.column(`product-${product.id}`, {
+        label: product.name,
+        key: 'productSales',
+        transform: (sales) => {
+          const sale = sales.find(s => s.productId === product.id)
+          return sale?.amount ?? 0
+        },
+        format: '"$"#,##0.00'
+      })
+    }
+  })
+  .build()
+```
+
+## Type Safety
+
+Dynamic groups maintain full type safety:
+
+- **Context Type Inference**: The context type is inferred and enforced when building
+- **Unique Keys**: Group keys must be unique and not conflict with column keys
+- **Builder Type Safety**: The builder passed to the handler has full type information
+
+```ts
+// ✅ Type-safe context
+.addTable({
+  data: users,
+  schema: schema,
+  context: {
+    'group:org': organizations // Type checked against Organization[]
+  }
+})
+
+// ❌ Missing required context
+.addTable({
+  data: users,
+  schema: schema
+  // Compile error: context is required
+})
+
+// ❌ Wrong context type
+.addTable({
+  data: users,
+  schema: schema,
+  context: {
+    'group:org': "invalid" // Compile error: expected Organization[]
+  }
+})
+```
+
+<Note>
+  Dynamic groups are evaluated at build time, not schema definition time. This allows the same schema to be reused with different contexts for different exports.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Define Columns" icon="table-columns" href="/schema/define-columns">
+    Learn about static column definitions
+  </Card>
+  <Card title="Column Summaries" icon="calculator" href="/schema/column-summaries">
+    Add computed summary rows to your columns
+  </Card>
+  <Card title="Transformers" icon="wand-magic-sparkles" href="/schema/transformers">
+    Transform data values before export
+  </Card>
+  <Card title="Build Schema" icon="hammer" href="/schema/build">
+    Finalize and use your schema
+  </Card>
+</CardGroup>

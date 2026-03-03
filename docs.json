@@ -1,122 +1,111 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Typed XLSX",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#1fa669",
+    "light": "#2dd17f",
+    "dark": "#188554"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/chronicstone/typed-xlsx"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/chronicstone/typed-xlsx"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/schemas",
+              "concepts/columns",
+              "concepts/transformers",
+              "concepts/formatters",
+              "concepts/styling"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Schema Builder",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "schema/create-schema",
+              "schema/define-columns",
+              "schema/dynamic-columns",
+              "schema/column-summaries",
+              "schema/transformers",
+              "schema/formatters",
+              "schema/build"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "File Builder",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "builder/create-builder",
+              "builder/sheets",
+              "builder/tables",
+              "builder/layouts",
+              "builder/build"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/nested-data",
+              "advanced/multi-table-sheets",
+              "advanced/dynamic-styling",
+              "advanced/column-selection",
+              "advanced/context-injection"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/basic-export",
+              "examples/financial-report",
+              "examples/user-data",
+              "examples/multi-sheet"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core Classes",
             "pages": [
-              "api-reference/introduction"
+              "api/excel-schema-builder",
+              "api/excel-builder"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Types",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/types/schema",
+              "api/types/column",
+              "api/types/transformers",
+              "api/types/formatters",
+              "api/types/build-params"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

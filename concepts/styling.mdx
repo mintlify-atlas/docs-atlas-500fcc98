@@ -1,0 +1,513 @@
+---
+title: 'Styling'
+description: 'Customize Excel cell appearance with fonts, colors, borders, and alignment'
+---
+
+## Overview
+
+Styling in typed-xlsx uses the [xlsx-js-style](https://github.com/gitbrent/xlsx-js-style) library to apply visual formatting to Excel cells. You can customize fonts, fills, borders, alignment, and more for headers, data cells, and summary rows.
+
+## CellStyle Type
+
+All styling uses the `CellStyle` interface from xlsx-js-style:
+
+```typescript
+import type { CellStyle } from 'xlsx-js-style'
+
+const style: CellStyle = {
+  font: { 
+    name: 'Arial',
+    sz: 12,
+    bold: true,
+    italic: false,
+    underline: false,
+    color: { rgb: '000000' }
+  },
+  fill: {
+    fgColor: { rgb: 'FFFF00' } // Yellow background
+  },
+  border: {
+    top: { style: 'thin', color: { rgb: '000000' } },
+    bottom: { style: 'thin', color: { rgb: '000000' } },
+    left: { style: 'thin', color: { rgb: '000000' } },
+    right: { style: 'thin', color: { rgb: '000000' } }
+  },
+  alignment: {
+    horizontal: 'center',
+    vertical: 'center',
+    wrapText: true
+  },
+  numFmt: '$#,##0.00' // Number format
+}
+```
+
+## Header Styling
+
+Customize column headers with the `headerStyle` property:
+
+```typescript
+import { ExcelSchemaBuilder } from 'typed-xlsx'
+import type { CellStyle } from 'xlsx-js-style'
+
+interface User {
+  id: number
+  name: string
+  email: string
+}
+
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('name', {
+    key: 'name',
+    label: 'Full Name',
+    headerStyle: {
+      fill: { fgColor: { rgb: '4472C4' } }, // Blue background
+      font: { 
+        color: { rgb: 'FFFFFF' }, // White text
+        bold: true,
+        sz: 14
+      },
+      alignment: { 
+        horizontal: 'center',
+        vertical: 'center'
+      }
+    }
+  })
+  .build()
+```
+
+### Default Header Style
+
+From `utils.ts:109-121`, the default header style is:
+
+```typescript
+{
+  font: { bold: true },
+  alignment: { horizontal: 'center', vertical: 'center' },
+  fill: { fgColor: { rgb: 'E9E9E9' } }, // Light gray
+  border: { /* Medium borders */ }
+}
+```
+
+Your custom `headerStyle` is merged with the defaults using deep merge.
+
+<Note>
+Headers always have borders when `bordered: true` (the default). Custom header styles are merged with default styles.
+</Note>
+
+## Cell Styling
+
+### Static Cell Styles
+
+Apply the same style to all cells in a column:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Product>()
+  .column('price', {
+    key: 'price',
+    cellStyle: {
+      fill: { fgColor: { rgb: 'E7E6E6' } }, // Light gray
+      alignment: { horizontal: 'right' },
+      font: { sz: 11 }
+    }
+  })
+  .build()
+```
+
+### Dynamic Cell Styles
+
+Use a function to style cells based on data:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Sale>()
+  .column('amount', {
+    key: 'amount',
+    cellStyle: (rowData, rowIndex, subRowIndex) => {
+      const style: CellStyle = {
+        fill: {
+          fgColor: { 
+            rgb: rowData.amount > 1000 ? '90EE90' : 'FFFFFF' // Green if > 1000
+          }
+        },
+        font: {
+          bold: rowData.amount > 1000,
+          color: { rgb: rowData.amount < 0 ? 'FF0000' : '000000' } // Red if negative
+        },
+        alignment: { horizontal: 'right' }
+      }
+      return style
+    }
+  })
+  .build()
+```
+
+<Info>
+Cell style functions receive three parameters:
+- `rowData`: The entire row object
+- `rowIndex`: Zero-based row index
+- `subRowIndex`: Zero-based index within array values (0 for non-arrays)
+</Info>
+
+### Conditional Styling Examples
+
+#### Status-Based Coloring
+
+```typescript
+.column('status', {
+  key: 'status',
+  cellStyle: (row) => ({
+    fill: {
+      fgColor: {
+        rgb: row.status === 'active' ? 'C6EFCE' :   // Green
+             row.status === 'pending' ? 'FFEB9C' :  // Yellow
+             'FFC7CE'                                // Red
+      }
+    },
+    font: {
+      color: {
+        rgb: row.status === 'active' ? '006100' :
+             row.status === 'pending' ? '9C6500' :
+             '9C0006'
+      }
+    }
+  })
+})
+```
+
+#### Alternating Row Colors
+
+```typescript
+.column('name', {
+  key: 'name',
+  cellStyle: (row, rowIndex) => ({
+    fill: {
+      fgColor: { rgb: rowIndex % 2 === 0 ? 'FFFFFF' : 'F2F2F2' }
+    }
+  })
+})
+```
+
+#### Threshold-Based Styling
+
+```typescript
+.column('score', {
+  key: 'score',
+  cellStyle: (row) => {
+    let color = '000000' // Black
+    if (row.score >= 90) color = '006100' // Dark green
+    else if (row.score >= 70) color = '9C6500' // Dark yellow
+    else if (row.score < 50) color = '9C0006' // Dark red
+    
+    return {
+      font: { color: { rgb: color }, bold: row.score >= 90 }
+    }
+  }
+})
+```
+
+## Title Styling
+
+Style the table title row:
+
+```typescript
+import { ExcelBuilder } from 'typed-xlsx'
+
+const excel = ExcelBuilder.create()
+  .sheet('Sales Report')
+  .addTable({
+    title: 'Q4 2024 Sales',
+    titleStyle: {
+      fill: { fgColor: { rgb: '4472C4' } }, // Blue
+      font: { 
+        color: { rgb: 'FFFFFF' },
+        bold: true,
+        sz: 20 // Large font
+      },
+      alignment: { horizontal: 'left', vertical: 'center' }
+    },
+    schema,
+    data: salesData
+  })
+  .build({ output: 'buffer' })
+```
+
+### Dynamic Title Styling
+
+```typescript
+.addTable({
+  title: 'Sales Report',
+  titleStyle: (data) => ({
+    fill: {
+      fgColor: {
+        rgb: data.length > 100 ? '4472C4' : '70AD47' // Blue if many rows
+      }
+    },
+    font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 20 }
+  }),
+  schema,
+  data
+})
+```
+
+<Note>
+Title styles receive the entire data array as a parameter, allowing styling based on data size or content.
+</Note>
+
+## Summary Row Styling
+
+Style summary rows with `cellStyle` in the summary definition:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Sale>()
+  .column('amount', {
+    key: 'amount',
+    summary: [
+      {
+        value: (data) => data.reduce((sum, row) => sum + row.amount, 0),
+        cellStyle: {
+          font: { bold: true, sz: 12 },
+          fill: { fgColor: { rgb: 'FFEB9C' } }, // Yellow
+          alignment: { horizontal: 'right' }
+        }
+      },
+      {
+        value: (data) => data.length,
+        cellStyle: (data) => ({
+          font: { 
+            bold: true,
+            color: { rgb: data.length > 100 ? 'FF0000' : '000000' }
+          },
+          fill: { fgColor: { rgb: 'E7E6E6' } }
+        })
+      }
+    ]
+  })
+  .build()
+```
+
+Summary cell styles can be:
+- **Static object**: Applied to all summary cells
+- **Function**: Dynamic styling based on the entire data array
+
+### Default Summary Style
+
+From `index.ts:281-285`, summary rows have default styling:
+
+```typescript
+{
+  font: { bold: true },
+  fill: { fgColor: { rgb: 'E9E9E9' } },
+  alignment: { vertical: 'center' }
+}
+```
+
+## Border Styles
+
+### Built-in Border Styles
+
+From `const.ts`, typed-xlsx provides two border presets:
+
+```typescript
+// Thin borders (default for data cells)
+const THIN_BORDER_STYLE = {
+  top: { style: 'thin', color: { rgb: '000000' } },
+  left: { style: 'thin', color: { rgb: '000000' } },
+  right: { style: 'thin', color: { rgb: '000000' } },
+  bottom: { style: 'thin', color: { rgb: '000000' } }
+}
+
+// Thick borders (for headers and groups)
+const THICK_BORDER_STYLE = {
+  top: { style: 'medium', color: { rgb: '000000' } },
+  left: { style: 'medium', color: { rgb: '000000' } },
+  right: { style: 'medium', color: { rgb: '000000' } },
+  bottom: { style: 'medium', color: { rgb: '000000' } }
+}
+```
+
+### Custom Borders
+
+```typescript
+.column('total', {
+  key: 'total',
+  cellStyle: {
+    border: {
+      top: { style: 'double', color: { rgb: '000000' } },
+      bottom: { style: 'double', color: { rgb: '000000' } }
+    }
+  }
+})
+```
+
+Border styles:
+- `'thin'`: Standard thin line
+- `'medium'`: Medium line
+- `'thick'`: Thick line
+- `'double'`: Double line
+- `'dotted'`: Dotted line
+- `'dashed'`: Dashed line
+
+### Disabling Borders
+
+Disable borders globally when building:
+
+```typescript
+excel.build({
+  output: 'buffer',
+  bordered: false // No borders on any cells
+})
+```
+
+<Tip>
+Borders are enabled by default (`bordered: true`). Set `bordered: false` in build params to remove all borders.
+</Tip>
+
+## Font Properties
+
+```typescript
+const fontStyle: CellStyle['font'] = {
+  name: 'Arial',        // Font family
+  sz: 12,               // Font size in points
+  bold: true,           // Bold
+  italic: true,         // Italic
+  underline: true,      // Underline
+  strike: true,         // Strikethrough
+  color: { rgb: 'FF0000' }, // Font color (hex RGB)
+  vertAlign: 'superscript' // 'superscript' | 'subscript'
+}
+```
+
+## Fill Properties
+
+```typescript
+const fillStyle: CellStyle['fill'] = {
+  fgColor: { rgb: 'FFFF00' },    // Foreground color (yellow)
+  bgColor: { rgb: 'FF0000' },    // Background color (red)
+  patternType: 'solid'            // Fill pattern
+}
+```
+
+Common RGB colors:
+- `'FFFFFF'`: White
+- `'000000'`: Black
+- `'FF0000'`: Red
+- `'00FF00'`: Green
+- `'0000FF'`: Blue
+- `'FFFF00'`: Yellow
+- `'FFA500'`: Orange
+- `'800080'`: Purple
+- `'FFC0CB'`: Pink
+- `'808080'`: Gray
+
+## Alignment Properties
+
+```typescript
+const alignmentStyle: CellStyle['alignment'] = {
+  horizontal: 'center',  // 'left' | 'center' | 'right' | 'justify'
+  vertical: 'middle',    // 'top' | 'middle' | 'bottom'
+  wrapText: true,        // Wrap text in cell
+  textRotation: 45,      // Rotate text (0-180 degrees)
+  indent: 1              // Indentation level
+}
+```
+
+## Style Merging
+
+Styles are merged using deep merge (from `deepmerge-ts`):
+
+```typescript
+// From utils.ts:367-373
+return {
+  v: params.value,
+  t: getCellDataType(params.value),
+  z: format,
+  s: deepmerge({
+    border: (params.bordered ?? true) ? THIN_BORDER_STYLE : {},
+    alignment: { vertical: 'center' },
+    numFmt: format,
+  }, style, params.extraStyle ?? {})
+}
+```
+
+Merge order:
+1. Default styles (borders, vertical alignment)
+2. Your custom `cellStyle` or `headerStyle`
+3. Extra styles (applied internally for special cases)
+
+<Note>
+Deep merge means nested properties are merged, not replaced. You can override specific properties without affecting others.
+</Note>
+
+## Build Options
+
+Global styling options when building the workbook:
+
+```typescript
+excel.build({
+  output: 'buffer',
+  bordered: true,        // Enable/disable borders (default: true)
+  rowHeight: 30,         // Row height in points (default: 30)
+  extraLength: 5,        // Extra column width padding (default: 5)
+  rtl: false             // Right-to-left layout (default: false)
+})
+```
+
+## Common Styling Patterns
+
+### Excel-Style Accounting Format
+
+```typescript
+.column('amount', {
+  key: 'amount',
+  format: '_($* #,##0.00_);_($* (#,##0.00);_($* "-"??_);_(@_)',
+  cellStyle: {
+    alignment: { horizontal: 'right' },
+    font: { name: 'Calibri', sz: 11 }
+  }
+})
+```
+
+### Header with Gradient Effect
+
+```typescript
+.column('name', {
+  key: 'name',
+  headerStyle: {
+    fill: { fgColor: { rgb: '4472C4' } },
+    font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 12 },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: {
+      bottom: { style: 'medium', color: { rgb: '2F5597' } }
+    }
+  }
+})
+```
+
+### Zebra Striping with Borders
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('id', {
+    key: 'id',
+    cellStyle: (row, index) => ({
+      fill: { fgColor: { rgb: index % 2 === 0 ? 'FFFFFF' : 'F2F2F2' } }
+    })
+  })
+  .column('name', {
+    key: 'name',
+    cellStyle: (row, index) => ({
+      fill: { fgColor: { rgb: index % 2 === 0 ? 'FFFFFF' : 'F2F2F2' } }
+    })
+  })
+  .build()
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Columns" icon="table-columns" href="/concepts/columns">
+    Learn about column configuration
+  </Card>
+  <Card title="Formatters" icon="palette" href="/concepts/formatters">
+    Format cell values in Excel
+  </Card>
+</CardGroup>

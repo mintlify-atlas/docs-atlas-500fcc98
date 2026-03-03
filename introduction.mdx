@@ -1,0 +1,133 @@
+---
+title: Introduction
+description: Export any data into Excel files effortlessly with type-safety and great developer experience
+---
+
+# typed-xlsx
+
+Export any data into xls/xlsx files effortlessly, while benefiting from great type-safety and developer experience.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get started with typed-xlsx in minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install typed-xlsx in your project
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/excel-schema-builder">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Examples" icon="lightbulb" href="/examples/basic-export">
+    Browse example use cases and patterns
+  </Card>
+</CardGroup>
+
+## Why typed-xlsx?
+
+Building Excel exports shouldn't be painful. typed-xlsx provides a type-safe, intuitive API for creating complex spreadsheets with minimal code.
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="Type-safe Schema Builder" icon="shield-check">
+    Design your spreadsheet schema with strong typing for enhanced reliability and developer experience
+  </Card>
+  
+  <Card title="Type-safe Data Serialization" icon="arrows-rotate">
+    Ensure data integrity through type-safe serialization and transformation functionalities
+  </Card>
+  
+  <Card title="Custom Value Pre-processors" icon="wand-magic-sparkles">
+    Utilize shared pre-processors for consistent value transformation across your exports
+  </Card>
+  
+  <Card title="Column Summary" icon="calculator">
+    Auto-insert computed column summaries for efficient data analysis and overview
+  </Card>
+  
+  <Card title="Complex Row Structures" icon="table-cells">
+    Implement advanced row layouts with sub-rows for automatic row merging and styling
+  </Card>
+  
+  <Card title="Default Values Management" icon="check-circle">
+    Manage default values effortlessly, ensuring your data is presented exactly as you intend
+  </Card>
+  
+  <Card title="Dynamic Column Selection" icon="list-check">
+    Selectively choose which columns of the schema to use when building a table
+  </Card>
+  
+  <Card title="Dynamic Column Mapping" icon="diagram-project">
+    Map columns dynamically with a type-safe context, injected when building sheet
+  </Card>
+  
+  <Card title="Dynamic Cell Styling" icon="palette">
+    Customize cell styling and formatting dynamically per-row with ease
+  </Card>
+  
+  <Card title="Multi-sheet Support" icon="file-invoice">
+    Create spreadsheets with multiple sheets for organized data presentation
+  </Card>
+  
+  <Card title="Multiple Tables Per Sheet" icon="table-list">
+    Include as many tables as you need inside the same sheet
+  </Card>
+  
+  <Card title="Flexible Layouts" icon="grid">
+    Choose between linear or grid layouts for sheets with multiple tables
+  </Card>
+</CardGroup>
+
+## Simple Example
+
+Here's a taste of what working with typed-xlsx looks like:
+
+```typescript
+import { ExcelSchemaBuilder, ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+}
+
+// Define your schema with full type-safety
+const userSchema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .build()
+
+// Build your Excel file
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: userSchema,
+  })
+  .build({ output: 'buffer' })
+```
+
+<Note>
+  TypeScript will validate your column keys, transformations, and data structures at compile time, catching errors before they reach production.
+</Note>
+
+## Next Steps
+
+<Steps>
+  <Step title="Install the package">
+    Follow the [installation guide](/installation) to add typed-xlsx to your project
+  </Step>
+  
+  <Step title="Follow the quickstart">
+    Learn the basics with our [quickstart guide](/quickstart)
+  </Step>
+  
+  <Step title="Explore the API">
+    Dive deeper into the [API reference](/api/excel-schema-builder) to discover all features
+  </Step>
+</Steps>

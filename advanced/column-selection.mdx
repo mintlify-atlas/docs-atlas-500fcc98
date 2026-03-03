@@ -1,0 +1,422 @@
+---
+title: 'Dynamic Column Selection'
+description: 'Selectively choose which columns to include when building tables from schemas'
+icon: 'table-columns'
+---
+
+## Overview
+
+Column selection allows you to create multiple views of the same data using a single schema. Instead of defining multiple schemas, you can use the `select` parameter to choose which columns to include or exclude when building tables.
+
+## Basic Column Selection
+
+### Positive Selection (Include Specific Columns)
+
+Specify which columns to include:
+
+```typescript
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  address: string
+}
+
+const userSchema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .column('phone', { key: 'phone' })
+  .column('address', { key: 'address' })
+  .build()
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Basic Info')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+Only the `firstName`, `lastName`, and `email` columns will be included.
+
+### Negative Selection (Exclude Specific Columns)
+
+Specify which columns to exclude:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Without Sensitive Data')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: {
+      phone: false,
+      address: false
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+All columns except `phone` and `address` will be included.
+
+<Warning>
+  **Do not mix positive and negative selection.** Use either all `true` values (include) or all `false` values (exclude), not both.
+</Warning>
+
+## Type-Safe Selection
+
+The `select` parameter is fully type-safe:
+
+```typescript
+type SelectColsMap = { [key in ColumnKeys]?: boolean }
+
+// TypeScript will error if you use invalid column keys
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: {
+      firstName: true,
+      invalidColumn: true // ❌ TypeScript error
+    }
+  })
+```
+
+<Tip>
+  Your IDE will provide autocomplete for available column keys, making selection intuitive and error-free.
+</Tip>
+
+## Selection Logic Implementation
+
+The library determines which columns to include using this logic:
+
+```typescript
+function shouldIncludeColumn(column, select) {
+  // No selection = include all columns
+  if (!select || Object.keys(select).length === 0) {
+    return true
+  }
+  
+  const selectorMap = Object.entries(select).map(([key, value]) => ({ key, value }))
+  
+  // All false (negative selection) + column not in select = include
+  if (selectorMap.every(({ value }) => value === false) && 
+      !selectorMap.some(({ key }) => key === column.columnKey)) {
+    return true
+  }
+  
+  // Column explicitly set to true = include
+  if (selectorMap.some(({ key, value }) => key === column.columnKey && value === true)) {
+    return true
+  }
+  
+  return false
+}
+```
+
+## Multiple Views from One Schema
+
+Create different exports for different audiences:
+
+```typescript
+const userSchema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .column('roles', { key: 'roles', transform: 'list' })
+  .column('balance', { key: 'balance', format: '"$"#,##0.00' })
+  .column('createdAt', { key: 'createdAt', format: 'd mmm yyyy' })
+  .build()
+
+const buffer = ExcelBuilder
+  .create()
+  // Public view: basic information only
+  .sheet('Public View')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true
+    }
+  })
+  // Admin view: includes roles and balance
+  .sheet('Admin View')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      roles: true,
+      balance: true
+    }
+  })
+  // Audit view: everything except balance
+  .sheet('Audit View')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: {
+      balance: false
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+## Selection with Context Injection
+
+Column selection works seamlessly with dynamic column groups:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .group('group:org', (builder, context: Organization[]) => {
+    for (const org of context) {
+      builder.column(`org-${org.id}`, {
+        label: `Member of ${org.name}`,
+        key: 'organizations',
+        transform: orgs => orgs.some(o => o.id === org.id) ? 'Yes' : 'No'
+      })
+    }
+  })
+  .build()
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Without Org Columns')
+  .addTable({
+    data: users,
+    schema: schema,
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true
+      // group:org columns automatically excluded
+    }
+  })
+  .sheet('With Specific Org')
+  .addTable({
+    data: users,
+    schema: schema,
+    select: {
+      firstName: true,
+      lastName: true,
+      'org-123': true // Include specific org column
+    },
+    context: {
+      'group:org': organizations
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+<Accordion title="How Selection Affects Context Requirements">
+  When you select columns, TypeScript automatically determines which context is required:
+  
+  ```typescript
+  // No org columns selected = no context required
+  .addTable({
+    data: users,
+    schema: schema,
+    select: { firstName: true, lastName: true }
+    // context property not required
+  })
+  
+  // Org columns selected = context required
+  .addTable({
+    data: users,
+    schema: schema,
+    select: { firstName: true, 'org-123': true },
+    context: { 'group:org': organizations } // ✅ Required
+  })
+  ```
+</Accordion>
+
+## Selection with Summaries
+
+Column selection includes summary rows:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<Transaction>()
+  .column('id', { key: 'id' })
+  .column('description', { key: 'description' })
+  .column('amount', {
+    key: 'amount',
+    format: '"$"#,##0.00',
+    summary: [{
+      value: (data) => data.reduce((sum, t) => sum + t.amount, 0),
+      format: '"$"#,##0.00'
+    }]
+  })
+  .column('tax', {
+    key: 'tax',
+    format: '"$"#,##0.00',
+    summary: [{
+      value: (data) => data.reduce((sum, t) => sum + t.tax, 0),
+      format: '"$"#,##0.00'
+    }]
+  })
+  .build()
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Without Tax')
+  .addTable({
+    data: transactions,
+    schema: schema,
+    select: {
+      id: true,
+      description: true,
+      amount: true
+      // tax column and its summary excluded
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+## Real-World Example
+
+From the library's README:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users - full')
+  .addTable({
+    data: users,
+    schema: assessmentExport,
+    context: {
+      'group:org': organizations
+    }
+  })
+  .sheet('Users - partial')
+  .addTable({
+    data: users,
+    schema: assessmentExport,
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true
+    }
+  })
+  .sheet('User - neg partial')
+  .addTable({
+    data: users,
+    schema: assessmentExport,
+    select: {
+      firstName: false,
+      lastName: false,
+      email: false
+    },
+    context: {
+      'group:org': organizations
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+## Advanced Patterns
+
+### Dynamic Selection Based on User Role
+
+```typescript
+function getColumnSelection(userRole: string) {
+  const baseColumns = {
+    firstName: true,
+    lastName: true,
+    email: true
+  }
+  
+  if (userRole === 'admin') {
+    return {
+      ...baseColumns,
+      roles: true,
+      balance: true,
+      createdAt: true
+    }
+  }
+  
+  if (userRole === 'manager') {
+    return {
+      ...baseColumns,
+      createdAt: true
+    }
+  }
+  
+  return baseColumns
+}
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: getColumnSelection(currentUser.role)
+  })
+  .build({ output: 'buffer' })
+```
+
+### Excluding Columns by Pattern
+
+```typescript
+function excludePattern(schema: any, pattern: RegExp) {
+  const select: Record<string, boolean> = {}
+  
+  for (const column of schema.columns) {
+    if (pattern.test(column.columnKey)) {
+      select[column.columnKey] = false
+    }
+  }
+  
+  return select
+}
+
+// Exclude all columns starting with 'internal_'
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Public Data')
+  .addTable({
+    data: users,
+    schema: userSchema,
+    select: excludePattern(userSchema, /^internal_/)
+  })
+  .build({ output: 'buffer' })
+```
+
+## Best Practices
+
+1. **Single schema, multiple views**: Define comprehensive schemas and use selection for different use cases
+2. **Consistent patterns**: Use positive selection for short lists, negative for exclusions
+3. **Role-based exports**: Create helper functions that map user roles to column selections
+4. **Document selection logic**: Comment why certain columns are included/excluded for specific views
+5. **Type safety**: Let TypeScript guide you—invalid selections will error at compile time
+
+<Tip>
+  Column selection is especially powerful when combined with multi-table sheets. You can show different views of the same data side by side for easy comparison.
+</Tip>

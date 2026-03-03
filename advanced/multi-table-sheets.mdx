@@ -1,0 +1,285 @@
+---
+title: 'Multiple Tables per Sheet'
+description: 'Create complex Excel sheets with multiple tables in linear or grid layouts'
+icon: 'table-cells'
+---
+
+## Overview
+
+Typed-xlsx supports adding multiple tables to a single sheet with flexible layout options. You can arrange tables linearly (stacked vertically) or in a grid layout with multiple tables per row.
+
+## Basic Multi-Table Sheet
+
+Add multiple tables to a sheet by chaining `.addTable()` calls:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Multi-table Sheet')
+  .addTable({
+    title: 'Sales Data',
+    data: salesData,
+    schema: salesSchema
+  })
+  .addTable({
+    title: 'Marketing Data',
+    data: marketingData,
+    schema: marketingSchema
+  })
+  .addTable({
+    title: 'Operations Data',
+    data: operationsData,
+    schema: operationsSchema
+  })
+  .build({ output: 'buffer' })
+```
+
+By default, tables are arranged vertically with automatic spacing.
+
+## Grid Layout
+
+Use the `tablesPerRow` parameter to create a grid layout:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Multi-tables-grid', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Q1 Results',
+    data: q1Data,
+    schema: quarterSchema,
+    select: { month: true, revenue: true, expenses: true }
+  })
+  .addTable({
+    title: 'Q2 Results',
+    data: q2Data,
+    schema: quarterSchema,
+    select: { month: true, revenue: true, expenses: true }
+  })
+  .addTable({
+    title: 'Q3 Results',
+    data: q3Data,
+    schema: quarterSchema,
+    select: { month: true, revenue: true, expenses: true }
+  })
+  .addTable({
+    title: 'Q4 Results',
+    data: q4Data,
+    schema: quarterSchema,
+    select: { month: true, revenue: true, expenses: true }
+  })
+  .build({ output: 'buffer' })
+```
+
+This creates a 2×2 grid with quarterly data side by side.
+
+<Tip>
+  Grid layouts are perfect for comparing similar datasets across different time periods, categories, or segments.
+</Tip>
+
+## Sheet Configuration
+
+The `SheetParams` interface provides configuration options:
+
+```typescript
+interface SheetParams {
+  // Number of tables per row (default: undefined = linear layout)
+  tablesPerRow?: number
+  
+  // Width of separator between tables (default: 25)
+  tableSeparatorWidth?: number
+}
+```
+
+### Custom Table Separation
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Custom Spacing', { 
+    tablesPerRow: 3,
+    tableSeparatorWidth: 10 // Narrower spacing
+  })
+  .addTable({ /* ... */ })
+  .addTable({ /* ... */ })
+  .addTable({ /* ... */ })
+  .build({ output: 'buffer' })
+```
+
+## Table Titles and Styling
+
+Each table can have a title with custom styling:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Styled Tables')
+  .addTable({
+    title: 'High Priority Items',
+    titleStyle: {
+      font: { color: { rgb: 'd10808' }, bold: true, sz: 16 },
+      fill: { fgColor: { rgb: 'ffcccc' } }
+    },
+    data: highPriorityData,
+    schema: itemSchema
+  })
+  .addTable({
+    title: 'Low Priority Items',
+    titleStyle: (data) => ({
+      font: { 
+        color: { rgb: data.length > 10 ? 'd10808' : '61eb34' },
+        bold: true 
+      }
+    }),
+    data: lowPriorityData,
+    schema: itemSchema
+  })
+  .build({ output: 'buffer' })
+```
+
+<Accordion title="Title Styling Properties">
+  Title cells support all standard Excel cell styles:
+  - `font`: Font properties (color, size, bold, etc.)
+  - `fill`: Background color
+  - `alignment`: Text alignment
+  - `border`: Border styles
+
+  Use function-based styling for dynamic title appearance based on data.
+</Accordion>
+
+## Layout Calculation
+
+The library automatically calculates:
+
+1. **Column offsets**: Horizontal positioning of each table
+2. **Row offsets**: Vertical positioning based on previous table heights
+3. **Cell merging**: Title rows span all table columns
+4. **Range calculations**: Proper worksheet ranges for all tables
+
+<Warning>
+  Tables in a grid row use the height of the tallest table in that row. This ensures proper alignment but may create whitespace for shorter tables.
+</Warning>
+
+## Advanced Layout Patterns
+
+### Mixed Table Widths
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Mixed Widths', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Summary',
+    data: summaryData,
+    schema: summarySchema,
+    select: { metric: true, value: true } // 2 columns
+  })
+  .addTable({
+    title: 'Detailed Breakdown',
+    data: detailedData,
+    schema: detailedSchema // Many columns
+  })
+  .build({ output: 'buffer' })
+```
+
+### Combining Linear and Grid Sections
+
+Create multiple sheets with different layouts:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  // Linear layout for detailed data
+  .sheet('Full Details')
+  .addTable({ data: allUsers, schema: fullUserSchema })
+  
+  // Grid layout for summaries
+  .sheet('Department Summaries', { tablesPerRow: 3 })
+  .addTable({ title: 'Sales', data: salesUsers, schema: summarySchema })
+  .addTable({ title: 'Engineering', data: engUsers, schema: summarySchema })
+  .addTable({ title: 'Marketing', data: mktUsers, schema: summarySchema })
+  
+  .build({ output: 'buffer' })
+```
+
+## Selective Column Display
+
+Combine multi-table layouts with column selection for focused views:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('User Comparison', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Active Users',
+    data: activeUsers,
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true, lastLogin: true }
+  })
+  .addTable({
+    title: 'Inactive Users',
+    data: inactiveUsers,
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true, accountStatus: true }
+  })
+  .build({ output: 'buffer' })
+```
+
+## Performance Considerations
+
+<Accordion title="Memory Usage">
+  Each table maintains its own cache for row heights and cell values. For sheets with many tables (>10), consider splitting into multiple sheets.
+</Accordion>
+
+<Accordion title="Calculation Overhead">
+  The layout engine calculates:
+  - Individual table heights and widths
+  - Chunk-based positioning for grid layouts
+  - Merged cell ranges for titles and multi-row cells
+  
+  This happens once during the build phase with minimal performance impact.
+</Accordion>
+
+## Best Practices
+
+1. **Use consistent schemas**: When using grid layouts, use the same or similar schemas for visual consistency
+2. **Limit tables per row**: 2-3 tables per row is optimal for readability
+3. **Add titles**: Always use titles to identify tables in multi-table sheets
+4. **Column selection**: Use `select` to keep grid tables compact and focused
+5. **Separator width**: Adjust `tableSeparatorWidth` based on column widths (wider columns = wider separators)
+
+## Real-World Example
+
+From the library's README:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('User - Multiple tables')
+  .addTable({
+    title: 'Active Users',
+    data: users.filter(u => u.active),
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true, createdAt: true }
+  })
+  .addTable({
+    title: 'Inactive Users',
+    data: users.filter(u => !u.active),
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true, balance: true }
+  })
+  .sheet('Multi-tables-grid', { tablesPerRow: 2 })
+  .addTable({
+    title: 'Table 1',
+    data: users.filter((_, i) => i < 5),
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true, createdAt: true }
+  })
+  .addTable({
+    title: 'Table 2',
+    data: users.filter((_, i) => i < 5),
+    schema: userSchema,
+    select: { firstName: true, lastName: true, email: true, balance: true }
+  })
+  .build({ output: 'buffer' })
+```

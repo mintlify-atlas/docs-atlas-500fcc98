@@ -1,0 +1,315 @@
+---
+title: 'ExcelBuilder'
+description: 'Builder class for creating Excel workbooks with multiple sheets and tables'
+---
+
+## Overview
+
+The `ExcelBuilder` class provides a fluent API for constructing Excel workbooks with multiple sheets, each containing one or more tables. It handles layout, styling, and output generation.
+
+## Type Parameters
+
+<ParamField path="UsedSheetKeys" type="string" default="never">
+  Union of already-used sheet keys to prevent duplicates (tracked at compile-time)
+</ParamField>
+
+## Static Methods
+
+### create()
+
+Creates a new `ExcelBuilder` instance.
+
+```typescript
+public static create(): ExcelBuilder
+```
+
+**Returns:** A new `ExcelBuilder` instance
+
+**Example:**
+```typescript
+const excel = ExcelBuilder.create()
+```
+
+## Instance Methods
+
+### sheet()
+
+Defines a new sheet in the workbook.
+
+```typescript
+public sheet<Key extends string>(
+  key: Not<Key, UsedSheetKeys>,
+  params?: SheetParams
+): SheetTableBuilder<ExcelBuilder<UsedSheetKeys | Key>, UsedSheetKeys | Key>
+```
+
+<ParamField path="key" type="string" required>
+  Unique key for the sheet (compile-time checked for duplicates)
+</ParamField>
+
+<ParamField path="params" type="SheetParams">
+  Optional sheet configuration parameters
+</ParamField>
+
+<Expandable title="SheetParams properties">
+  <ParamField path="tableSeparatorWidth" type="number">
+    Width in characters for separator columns between tables (default: 25)
+  </ParamField>
+
+  <ParamField path="tablesPerRow" type="number">
+    Maximum number of tables per row before wrapping to next row
+  </ParamField>
+</Expandable>
+
+**Returns:** A `SheetTableBuilder` for adding tables to the sheet
+
+**Throws:** Error if a sheet with the same key already exists
+
+**Example:**
+```typescript
+const excel = ExcelBuilder.create()
+  .sheet('orders', { tableSeparatorWidth: 30, tablesPerRow: 2 })
+```
+
+### build()
+
+Builds the final Excel workbook.
+
+```typescript
+public build<
+  OutputType extends TOutputType,
+  Output = ExcelBuildOutput<OutputType>
+>(
+  params: ExcelBuildParams<OutputType>
+): Output
+```
+
+<ParamField path="params" type="ExcelBuildParams" required>
+  Build configuration (see [BuildParams type](/api/types/build-params))
+</ParamField>
+
+<Expandable title="ExcelBuildParams properties">
+  <ParamField path="output" type="'buffer' | 'workbook' | 'base64' | 'file'" required>
+    Output format for the Excel file
+  </ParamField>
+
+  <ParamField path="rtl" type="boolean" default="false">
+    Enable right-to-left layout for Arabic/Hebrew
+  </ParamField>
+
+  <ParamField path="extraLength" type="number" default="5">
+    Extra characters to add to auto-calculated column widths
+  </ParamField>
+
+  <ParamField path="rowHeight" type="number" default="30">
+    Default height in points for data rows
+  </ParamField>
+
+  <ParamField path="bordered" type="boolean" default="true">
+    Whether to add borders to cells
+  </ParamField>
+</Expandable>
+
+**Returns:** Excel output in the specified format (Buffer, WorkBook, string, or File)
+
+**Example:**
+```typescript
+const buffer = excel.build({ output: 'buffer', bordered: true, rowHeight: 35 })
+
+const base64 = excel.build({ output: 'base64', rtl: false })
+
+const workbook = excel.build({ output: 'workbook' })
+```
+
+## SheetTableBuilder
+
+The `SheetTableBuilder` interface is returned by `sheet()` and provides methods for adding tables and managing the workbook.
+
+### addTable()
+
+Adds a table to the current sheet.
+
+```typescript
+addTable<
+  T extends GenericObject,
+  Schema extends ExcelSchema<T, any, string>,
+  ColKeys extends SchemaColumnKeys<Schema>,
+  SelectCols extends { [key in ColKeys]?: boolean } = {}
+>(
+  table: SheetTable<T, Schema, ColKeys, SelectCols>
+): SheetTableBuilder<Builder, UsedKeys>
+```
+
+<ParamField path="table" type="SheetTable" required>
+  Table configuration with schema, data, and options
+</ParamField>
+
+<Expandable title="SheetTable properties">
+  <ParamField path="schema" type="ExcelSchema" required>
+    Schema defining the table structure (created with ExcelSchemaBuilder)
+  </ParamField>
+
+  <ParamField path="data" type="T[]" required>
+    Array of data objects to populate the table
+  </ParamField>
+
+  <ParamField path="title" type="string">
+    Optional title displayed above the table
+  </ParamField>
+
+  <ParamField path="titleStyle" type="CellStyle | ((data: T[]) => CellStyle)">
+    Style for the title row
+  </ParamField>
+
+  <ParamField path="select" type="{ [key in ColKeys]?: boolean }">
+    Select/deselect specific columns (true = include, false = exclude)
+  </ParamField>
+
+  <ParamField path="context" type="object">
+    Context data required by column groups (type-checked based on schema)
+  </ParamField>
+
+  <ParamField path="summary" type="boolean" default="false">
+    Whether to include summary rows defined in column configurations
+  </ParamField>
+</Expandable>
+
+**Returns:** The `SheetTableBuilder` for method chaining
+
+**Example:**
+```typescript
+const orderSchema = ExcelSchemaBuilder.create<Order>()
+  .column('id', { label: 'Order ID', key: 'id' })
+  .column('total', { label: 'Total', key: 'amount' })
+  .build()
+
+const excel = ExcelBuilder.create()
+  .sheet('orders')
+  .addTable({
+    title: 'Order Report',
+    schema: orderSchema,
+    data: orders,
+    summary: true
+  })
+  .build({ output: 'buffer' })
+```
+
+### sheet()
+
+Starts defining a new sheet (same as `ExcelBuilder.sheet()`).
+
+```typescript
+sheet: Builder['sheet']
+```
+
+### build()
+
+Builds the workbook (same as `ExcelBuilder.build()`).
+
+```typescript
+build: Builder['build']
+```
+
+## Complete Example
+
+```typescript
+import { ExcelSchemaBuilder, ExcelBuilder } from 'typed-xlsx'
+
+interface Order {
+  id: string
+  customer: { name: string; email: string }
+  items: Array<{ name: string; price: number }>
+  total: number
+  status: 'pending' | 'shipped' | 'delivered'
+}
+
+// Define schema
+const orderSchema = ExcelSchemaBuilder.create<Order>()
+  .withTransformers({
+    currency: (value: number) => `$${value.toFixed(2)}`
+  })
+  .column('orderId', {
+    label: 'Order ID',
+    key: 'id'
+  })
+  .column('customerName', {
+    label: 'Customer',
+    key: 'customer.name'
+  })
+  .column('status', {
+    label: 'Status',
+    key: 'status',
+    cellStyle: (data) => ({
+      fill: { 
+        fgColor: { 
+          rgb: data.status === 'delivered' ? '00FF00' : 'FFFF00' 
+        } 
+      }
+    })
+  })
+  .column('total', {
+    label: 'Total Amount',
+    key: 'total',
+    transform: 'currency',
+    summary: [{
+      value: (data) => data.reduce((sum, order) => sum + order.total, 0),
+      format: '$#,##0.00'
+    }]
+  })
+  .build()
+
+// Build workbook
+const excel = ExcelBuilder.create()
+  .sheet('orders', { tablesPerRow: 1 })
+  .addTable({
+    title: '2024 Orders Report',
+    schema: orderSchema,
+    data: orders,
+    summary: true,
+    titleStyle: {
+      font: { bold: true, sz: 16 },
+      fill: { fgColor: { rgb: 'b4c4de' } }
+    }
+  })
+  .sheet('summary')
+  .addTable({
+    title: 'Sales Summary',
+    schema: summarySchema,
+    data: summaryData
+  })
+  .build({
+    output: 'buffer',
+    bordered: true,
+    rowHeight: 30,
+    rtl: false
+  })
+```
+
+## Layout Behavior
+
+### Multiple Tables per Sheet
+
+Tables are laid out horizontally by default:
+- Tables are placed side-by-side with a separator column between them
+- Use `tablesPerRow` to control wrapping behavior
+- Each table maintains independent row heights
+
+### Title Rows
+
+When a table has a title:
+- The title spans all columns of the table
+- Title row height is 40 points (larger than data rows)
+- Title cells are merged automatically
+
+### Summary Rows
+
+When `summary: true` is specified:
+- Summary rows appear at the bottom of the table
+- Summary cells use bold font and gray background by default
+- Multiple summary rows are supported per column
+
+## See Also
+
+- [ExcelSchemaBuilder](/api/excel-schema-builder) - Creating schemas
+- [BuildParams Type](/api/types/build-params) - Build configuration options
+- [Schema Type](/api/types/schema) - Schema structure

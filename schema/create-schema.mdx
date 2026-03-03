@@ -1,0 +1,171 @@
+---
+title: 'Creating a Schema'
+description: 'Learn how to create type-safe Excel schemas with ExcelSchemaBuilder'
+---
+
+## Overview
+
+The `ExcelSchemaBuilder` is the foundation of typed-xlsx. It provides a fluent API to define strongly-typed Excel schemas that ensure type safety throughout your export workflow.
+
+## Basic Usage
+
+<Steps>
+  <Step title="Define Your Data Type">
+    Start by defining the TypeScript interface for your data:
+
+    ```ts
+    interface User {
+      id: number
+      firstName: string
+      lastName: string
+      email: string
+      roles: string[]
+      createdAt: Date
+      balance: number
+    }
+    ```
+  </Step>
+
+  <Step title="Create the Schema Builder">
+    Use the static `create()` method to initialize a schema builder:
+
+    ```ts
+    import { ExcelSchemaBuilder } from '@chronicstone/typed-xlsx'
+
+    const userSchema = ExcelSchemaBuilder.create<User>()
+    ```
+
+    The builder automatically infers nested paths from your type, providing autocomplete for all accessible properties.
+  </Step>
+
+  <Step title="Build the Schema">
+    After defining columns, call `build()` to create the final schema:
+
+    ```ts
+    const schema = ExcelSchemaBuilder
+      .create<User>()
+      .column('id', { key: 'id' })
+      .column('firstName', { key: 'firstName' })
+      .column('email', { key: 'email' })
+      .build()
+    ```
+  </Step>
+</Steps>
+
+## Type Inference
+
+The schema builder provides intelligent type inference:
+
+- **Nested Paths**: Access nested properties with dot notation (e.g., `'results.general.overall'`)
+- **Auto-completion**: IDE autocomplete for all valid property paths
+- **Type Safety**: Invalid paths are caught at compile time
+
+```ts
+interface User {
+  results: {
+    general: { overall: number }
+    technical: { overall: number }
+  }
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('generalScore', {
+    key: 'results.general.overall', // ✅ Valid nested path
+    format: '# / 10'
+  })
+  .column('invalid', {
+    key: 'results.invalid.path' // ❌ Type error - path doesn't exist
+  })
+  .build()
+```
+
+## Method Reference
+
+### `ExcelSchemaBuilder.create<T>()`
+
+Static factory method to create a new schema builder instance.
+
+<ParamField path="T" type="Generic Type">
+  The TypeScript type/interface representing your data structure
+</ParamField>
+
+**Returns**: `ExcelSchemaBuilder<T, NestedPaths<T>>`
+
+### `build()`
+
+Finalizes the schema and returns an `ExcelSchema` object that can be used with `ExcelBuilder`.
+
+**Returns**: `ExcelSchema<T, KeyPaths, UsedKeys, ContextMap>`
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .build()
+
+// Use the schema with ExcelBuilder
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({ data: users, schema })
+  .build({ output: 'buffer' })
+```
+
+## Complete Example
+
+```ts
+interface Organization {
+  id: number
+  name: string
+}
+
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  organizations: Organization[]
+  results: {
+    general: { overall: number }
+    technical: { overall: number }
+  }
+}
+
+const userExportSchema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .column('generalScore', {
+    key: 'results.general.overall',
+    format: '# / 10'
+  })
+  .column('technicalScore', {
+    key: 'results.technical.overall',
+    format: '# / 10'
+  })
+  .build()
+```
+
+<Note>
+  The schema builder uses method chaining, allowing you to define multiple columns, transformers, formatters, and groups in a fluent, readable manner.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Define Columns" icon="table-columns" href="/schema/define-columns">
+    Learn how to define individual columns with labels, formats, and styles
+  </Card>
+  <Card title="Transformers" icon="wand-magic-sparkles" href="/schema/transformers">
+    Transform data values before export with reusable transformers
+  </Card>
+  <Card title="Formatters" icon="paintbrush" href="/schema/formatters">
+    Apply Excel number formats and custom formatting presets
+  </Card>
+  <Card title="Dynamic Columns" icon="layer-group" href="/schema/dynamic-columns">
+    Create columns dynamically based on runtime context
+  </Card>
+</CardGroup>

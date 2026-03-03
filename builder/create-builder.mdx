@@ -1,0 +1,57 @@
+---
+title: 'Create Builder'
+description: 'Initialize an ExcelBuilder instance to start composing your Excel workbooks'
+---
+
+## Overview
+
+The `ExcelBuilder` class is the main entry point for creating Excel workbooks with typed-xlsx. It provides a fluent API for adding sheets and tables with complete type safety.
+
+## Creating a Builder
+
+### ExcelBuilder.create()
+
+The static `create()` method initializes a new builder instance.
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+const builder = ExcelBuilder.create()
+```
+
+**Returns:** `ExcelBuilder<never>`
+
+A new builder instance with no sheets defined yet. The generic type parameter tracks which sheet keys have been used to prevent duplicates.
+
+<Note>
+  The builder uses TypeScript generics to track used sheet keys at compile time, preventing you from accidentally creating duplicate sheets.
+</Note>
+
+## Type Safety
+
+The builder maintains type safety throughout the entire composition process:
+
+```typescript
+const builder = ExcelBuilder.create()
+  .sheet('Users')      // UsedSheetKeys = 'Users'
+  .addTable({ ... })
+  .sheet('Products')   // UsedSheetKeys = 'Users' | 'Products'
+  .addTable({ ... })
+  .sheet('Users')      // ❌ TypeScript error: duplicate key!
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Add Sheets" icon="table" href="/builder/sheets">
+    Learn how to add sheets to your workbook
+  </Card>
+  <Card title="Add Tables" icon="table-cells" href="/builder/tables">
+    Add tables to your sheets with schemas
+  </Card>
+</CardGroup>
+
+## Related
+
+- [Sheet Configuration](/builder/sheets) - Configure sheet parameters
+- [Build Output](/builder/build) - Generate the final Excel file

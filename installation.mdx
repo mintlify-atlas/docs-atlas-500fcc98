@@ -1,0 +1,202 @@
+---
+title: Installation
+description: Install typed-xlsx in your project
+---
+
+# Installation
+
+Get started with typed-xlsx by installing it in your project.
+
+## Package Manager Installation
+
+Choose your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install @chronicstone/typed-xlsx
+```
+
+```bash yarn
+yarn add @chronicstone/typed-xlsx
+```
+
+```bash pnpm
+pnpm add @chronicstone/typed-xlsx
+```
+
+```bash bun
+bun add @chronicstone/typed-xlsx
+```
+</CodeGroup>
+
+## Requirements
+
+<Note>
+  typed-xlsx requires Node.js 16 or higher and works in both CommonJS and ES modules environments.
+</Note>
+
+### TypeScript Support
+
+typed-xlsx is built with TypeScript and includes full type definitions out of the box. No additional `@types` packages are needed.
+
+**Minimum TypeScript version:** 4.5+
+
+## Package Information
+
+<CardGroup cols={2}>
+  <Card title="npm Package" icon="npm" href="https://npmjs.com/package/@chronicstone/typed-xlsx">
+    View on npm registry
+  </Card>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/ChronicStone/typed-xlsx">
+    View source code
+  </Card>
+  <Card title="JSDoc Reference" icon="book" href="https://www.jsdocs.io/package/@chronicstone/typed-xlsx">
+    Browse JSDoc documentation
+  </Card>
+  <Card title="Bundle Size" icon="cube" href="https://bundlephobia.com/result?p=@chronicstone/typed-xlsx">
+    Check bundle size on Bundlephobia
+  </Card>
+</CardGroup>
+
+## Import in Your Project
+
+Once installed, you can import the main classes and types:
+
+<CodeGroup>
+```typescript ES Modules
+import { ExcelSchemaBuilder, ExcelBuilder } from '@chronicstone/typed-xlsx'
+import type { TransformersMap, ExcelSchema } from '@chronicstone/typed-xlsx'
+```
+
+```typescript CommonJS
+const { ExcelSchemaBuilder, ExcelBuilder } = require('@chronicstone/typed-xlsx')
+```
+</CodeGroup>
+
+## Peer Dependencies
+
+typed-xlsx has the following dependencies that are automatically installed:
+
+- **xlsx-js-style** - The underlying Excel library with styling support
+- **deepmerge-ts** - For deep merging of configuration objects
+
+<Tip>
+  These dependencies are automatically managed by your package manager. You don't need to install them separately.
+</Tip>
+
+## Verify Installation
+
+Create a simple test file to verify your installation:
+
+```typescript test.ts
+import { ExcelSchemaBuilder, ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+interface TestData {
+  id: number
+  name: string
+}
+
+const schema = ExcelSchemaBuilder
+  .create<TestData>()
+  .column('id', { key: 'id' })
+  .column('name', { key: 'name' })
+  .build()
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Test')
+  .addTable({
+    data: [{ id: 1, name: 'Test' }],
+    schema,
+  })
+  .build({ output: 'buffer' })
+
+console.log('Excel file generated successfully!', buffer.length, 'bytes')
+```
+
+Run the test:
+
+<CodeGroup>
+```bash Node.js
+node test.ts
+```
+
+```bash ts-node
+ts-node test.ts
+```
+
+```bash tsx
+tsx test.ts
+```
+
+```bash Bun
+bun test.ts
+```
+</CodeGroup>
+
+If you see "Excel file generated successfully!" with a byte count, you're all set!
+
+## Troubleshooting
+
+### TypeScript Errors
+
+If you encounter TypeScript errors after installation:
+
+<Steps>
+  <Step title="Check TypeScript version">
+    Ensure you're using TypeScript 4.5 or higher:
+    
+    ```bash
+    npx tsc --version
+    ```
+  </Step>
+  
+  <Step title="Update tsconfig.json">
+    Make sure your `tsconfig.json` includes:
+    
+    ```json
+    {
+      "compilerOptions": {
+        "module": "ESNext",
+        "moduleResolution": "node",
+        "strict": true
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Restart your IDE">
+    Restart your IDE/editor to reload TypeScript definitions.
+  </Step>
+</Steps>
+
+### Module Resolution Issues
+
+If you see module resolution errors:
+
+<Tip>
+  Make sure your `package.json` has the correct `type` field:
+  
+  - For ES modules: `"type": "module"`
+  - For CommonJS: omit the `type` field or set `"type": "commonjs"`
+</Tip>
+
+### Runtime Errors
+
+If you encounter runtime errors related to `xlsx-js-style`:
+
+1. Clear your `node_modules` and lock file:
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install
+   ```
+
+2. Ensure you're using a compatible Node.js version (16+)
+
+## Next Steps
+
+Now that you have typed-xlsx installed, continue to the quickstart guide:
+
+<Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+  Learn how to create your first Excel export with typed-xlsx
+</Card>

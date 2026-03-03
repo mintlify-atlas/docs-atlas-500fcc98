@@ -1,0 +1,288 @@
+---
+title: 'Defining Columns'
+description: 'Add columns to your Excel schema with labels, formats, and styles'
+---
+
+## Overview
+
+Columns are the building blocks of your Excel schema. Each column definition maps a data property to an Excel column with optional transformations, formatting, and styling.
+
+## Basic Column Definition
+
+Use the `column()` method to add a column to your schema:
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('email', { key: 'email' })
+  .build()
+```
+
+## Method Signature
+
+### `column<K, FieldValue, Preset>(columnKey, column)`
+
+Adds a column to the schema with type-safe configuration.
+
+<ParamField path="columnKey" type="string" required>
+  Unique identifier for this column. Must not conflict with existing columns.
+</ParamField>
+
+<ParamField path="column" type="Column<T, FieldValue, K, TransformMap, FormatMap, Preset>" required>
+  Column configuration object with the following properties:
+</ParamField>
+
+## Column Configuration
+
+### `key` (required)
+
+The property path to extract from your data. Supports nested paths with dot notation.
+
+```ts
+.column('generalScore', {
+  key: 'results.general.overall' // Access nested properties
+})
+```
+
+<Note>
+  The `key` can be either a string path or a function that receives the row data and returns a `CellValue`.
+</Note>
+
+### `key` as Function
+
+For complex value extraction, use a function:
+
+```ts
+.column('fullName', {
+  key: (user) => `${user.firstName} ${user.lastName}`
+})
+
+.column('hasInterview', {
+  key: (user) => user.results.interview !== undefined
+})
+```
+
+### `label`
+
+Custom header text for the column. Defaults to the `columnKey` if not specified.
+
+```ts
+.column('firstName', {
+  key: 'firstName',
+  label: 'First Name' // Custom header
+})
+```
+
+### `default`
+
+Default value when the property is `null` or `undefined`.
+
+```ts
+.column('interviewScore', {
+  key: 'results.interview.overall',
+  default: 'N/A' // Show 'N/A' for missing values
+})
+```
+
+### `format`
+
+Excel number format string or formatter preset. Can be static or dynamic.
+
+**Static Format:**
+```ts
+.column('balance', {
+  key: 'balance',
+  format: '"$"#,##0.00_);\\("$"#,##0.00\\)' // Currency format
+})
+
+.column('createdAt', {
+  key: 'createdAt',
+  format: 'd mmm yyyy' // Date format
+})
+
+.column('percentage', {
+  key: 'score',
+  format: '0.00%' // Percentage format
+})
+```
+
+**Dynamic Format:**
+```ts
+.column('score', {
+  key: 'score',
+  format: (rowData, rowIndex, subRowIndex) => {
+    return rowData.score > 50 ? '0.00%' : '#,##0.00'
+  }
+})
+```
+
+### `cellStyle`
+
+Custom cell styling using xlsx-js-style `CellStyle` objects. Can be static or dynamic.
+
+**Static Style:**
+```ts
+.column('email', {
+  key: 'email',
+  cellStyle: {
+    font: { color: { rgb: '0000FF' }, underline: true },
+    alignment: { horizontal: 'left' }
+  }
+})
+```
+
+**Dynamic Style:**
+```ts
+.column('roles', {
+  key: 'roles',
+  cellStyle: (data, rowIndex, subRowIndex) => ({
+    font: {
+      color: {
+        rgb: data.roles.includes('admin') ? 'd10808' : '000000'
+      }
+    }
+  })
+})
+```
+
+### `headerStyle`
+
+Custom styling for the column header cell.
+
+```ts
+.column('id', {
+  key: 'id',
+  headerStyle: {
+    font: { bold: true, sz: 14 },
+    fill: { fgColor: { rgb: 'FFFF00' } },
+    alignment: { horizontal: 'center' }
+  }
+})
+```
+
+### `transform`
+
+Transform the value before writing to Excel. Can be a transformer name (string) or inline function.
+
+See [Transformers](/schema/transformers) for detailed documentation.
+
+```ts
+.column('roles', {
+  key: 'roles',
+  transform: 'list' // Use registered transformer
+})
+
+.column('orgs', {
+  key: 'organizations',
+  transform: (orgs) => orgs.map(org => org.name).join(', ') // Inline
+})
+```
+
+## Complete Example
+
+```ts
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  roles: string[]
+  balance: number
+  createdAt: Date
+  results: {
+    general: { overall: number }
+  }
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', {
+    key: 'id',
+    label: 'User ID',
+    headerStyle: {
+      font: { bold: true },
+      fill: { fgColor: { rgb: 'CCCCCC' } }
+    }
+  })
+  .column('firstName', {
+    key: 'firstName',
+    label: 'First Name'
+  })
+  .column('lastName', {
+    key: 'lastName',
+    label: 'Last Name'
+  })
+  .column('email', {
+    key: 'email',
+    label: 'Email Address',
+    cellStyle: {
+      font: { color: { rgb: '0000FF' } }
+    }
+  })
+  .column('roles', {
+    key: 'roles',
+    label: 'Roles',
+    transform: (roles) => roles.join(', '),
+    cellStyle: (data) => ({
+      font: {
+        color: { rgb: data.roles.includes('admin') ? 'd10808' : '000000' }
+      }
+    })
+  })
+  .column('balance', {
+    key: 'balance',
+    label: 'Account Balance',
+    format: '"$"#,##0.00_);\\("$"#,##0.00\\)'
+  })
+  .column('createdAt', {
+    key: 'createdAt',
+    label: 'Registration Date',
+    format: 'd mmm yyyy'
+  })
+  .column('generalScore', {
+    key: 'results.general.overall',
+    label: 'General Score',
+    format: '# / 10'
+  })
+  .build()
+```
+
+<Warning>
+  Column keys must be unique within a schema. Attempting to add a column with a duplicate key will throw an error at runtime.
+</Warning>
+
+## Type Safety
+
+The `column()` method enforces type safety:
+
+- **Path Validation**: The `key` parameter only accepts valid property paths from your type
+- **Transformer Type Matching**: Transformers are type-checked against the property type
+- **Unique Keys**: The `columnKey` is tracked to prevent duplicates
+
+```ts
+.column('invalid', {
+  key: 'nonexistent.path' // ❌ Compile error - property doesn't exist
+})
+
+.column('id', { key: 'id' })
+.column('id', { key: 'email' }) // ❌ Compile error - 'id' already used
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Column Summaries" icon="calculator" href="/schema/column-summaries">
+    Add computed summary rows to your columns
+  </Card>
+  <Card title="Transformers" icon="wand-magic-sparkles" href="/schema/transformers">
+    Transform data values before export
+  </Card>
+  <Card title="Formatters" icon="paintbrush" href="/schema/formatters">
+    Apply Excel number formats and presets
+  </Card>
+  <Card title="Dynamic Columns" icon="layer-group" href="/schema/dynamic-columns">
+    Create columns dynamically at runtime
+  </Card>
+</CardGroup>

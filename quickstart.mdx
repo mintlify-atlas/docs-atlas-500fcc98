@@ -1,80 +1,208 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get started with typed-xlsx in 5 minutes
 ---
 
-## Get started in three steps
+Get up and running with typed-xlsx to create your first Excel export in just a few minutes.
 
-Get your documentation site running locally and make your first customization.
+<Note>
+  Make sure you have Node.js 16+ installed and typed-xlsx added to your project. See the [installation guide](/installation) if you haven't installed it yet.
+</Note>
 
-### Step 1: Set up your local environment
+## Overview
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+Creating an Excel export with typed-xlsx follows three simple steps:
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Define your data types">
+    Define TypeScript interfaces for your data
+  </Step>
+  <Step title="Build a schema">
+    Create a type-safe schema using ExcelSchemaBuilder
+  </Step>
+  <Step title="Generate the Excel file">
+    Use ExcelBuilder to create the workbook
+  </Step>
+</Steps>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+## Step 1: Define your data types
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+First, define the TypeScript interface for your data:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+```typescript
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  balance: number
+  createdAt: Date
+}
+```
 
-### Step 3: Go live
+## Step 2: Build a schema
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+Create a schema that maps your data to Excel columns:
+
+```typescript
+import { ExcelSchemaBuilder } from '@chronicstone/typed-xlsx'
+
+const userSchema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { 
+    key: 'id',
+    label: 'ID'
+  })
+  .column('firstName', { 
+    key: 'firstName',
+    label: 'First Name'
+  })
+  .column('lastName', { 
+    key: 'lastName',
+    label: 'Last Name'
+  })
+  .column('email', { 
+    key: 'email',
+    label: 'Email'
+  })
+  .column('balance', {
+    key: 'balance',
+    label: 'Balance',
+    format: '"$"#,##0.00'
+  })
+  .column('createdAt', {
+    key: 'createdAt',
+    label: 'Created',
+    format: 'd mmm yyyy'
+  })
+  .build()
+```
+
+<Tip>
+  TypeScript will provide autocomplete for column keys based on your data type, and catch typos at compile time!
+</Tip>
+
+## Step 3: Generate the Excel file
+
+Use ExcelBuilder to create your workbook:
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+import fs from 'fs'
+
+const users: User[] = [
+  {
+    id: 1,
+    firstName: 'John',
+    lastName: 'Doe',
+    email: 'john.doe@example.com',
+    balance: 1250.50,
+    createdAt: new Date('2024-01-15')
+  },
+  {
+    id: 2,
+    firstName: 'Jane',
+    lastName: 'Smith',
+    email: 'jane.smith@example.com',
+    balance: 3420.75,
+    createdAt: new Date('2024-02-20')
+  }
+]
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: userSchema
+  })
+  .build({ output: 'buffer' })
+
+// Save to file
+fs.writeFileSync('users.xlsx', buffer)
+```
+
+That's it! You now have a fully formatted Excel file with your user data.
+
+## Adding transformations
+
+You can transform data before it's written to Excel:
+
+```typescript
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  roles: string[]
+  isActive: boolean
+}
+
+// Define reusable transformers
+const transformers = {
+  list: (value: string[]) => value.join(', '),
+  boolean: (value: boolean) => value ? 'Yes' : 'No'
+}
+
+const userSchema = ExcelSchemaBuilder
+  .create<User>()
+  .withTransformers(transformers)
+  .column('id', { key: 'id' })
+  .column('name', {
+    key: 'firstName',
+    // Combine first and last name
+    transform: (firstName, index, data) => 
+      `${data[index].firstName} ${data[index].lastName}`
+  })
+  .column('email', { key: 'email' })
+  .column('roles', {
+    key: 'roles',
+    transform: 'list' // Use the named transformer
+  })
+  .column('status', {
+    key: 'isActive',
+    transform: 'boolean'
+  })
+  .build()
+```
+
+## Adding summaries
+
+Add summary rows to calculate totals, averages, and more:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', {
+    key: 'id',
+    summary: [{
+      value: () => 'TOTAL'
+    }]
+  })
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00',
+    summary: [{
+      value: data => data.reduce((sum, user) => sum + user.balance, 0),
+      format: '"$"#,##0.00'
+    }]
+  })
+  .build()
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Core Concepts" icon="book" href="/concepts/schemas">
+    Learn about schemas, columns, and transformers
+  </Card>
+  <Card title="Examples" icon="code" href="/examples/basic-export">
+    Explore real-world examples
+  </Card>
+  <Card title="API Reference" icon="brackets-curly" href="/api/excel-schema-builder">
+    Complete API documentation
+  </Card>
+  <Card title="Advanced Features" icon="wand-magic-sparkles" href="/advanced/nested-data">
+    Multi-table sheets, dynamic styling, and more
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

@@ -1,0 +1,184 @@
+---
+title: 'Schemas'
+description: 'Define type-safe Excel schemas with columns, transformers, and formatters'
+---
+
+## Overview
+
+Schemas are the foundation of typed-xlsx. They define the structure of your Excel export, including columns, data transformations, and formatting rules. Schemas are built using the `ExcelSchemaBuilder` class, which provides a fluent API with full TypeScript type safety.
+
+## Creating a Schema
+
+Use `ExcelSchemaBuilder.create()` to create a new schema builder. The builder automatically infers nested paths from your data type:
+
+```typescript
+import { ExcelSchemaBuilder } from 'typed-xlsx'
+
+interface User {
+  id: number
+  name: string
+  email: string
+  profile: {
+    age: number
+    city: string
+  }
+}
+
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('id', {
+    key: 'id',
+    label: 'User ID'
+  })
+  .column('name', {
+    key: 'name',
+    label: 'Full Name'
+  })
+  .column('city', {
+    key: 'profile.city', // Access nested properties with dot notation
+    label: 'City'
+  })
+  .build()
+```
+
+<Note>
+The generic type parameter `<User>` enables TypeScript to infer all available paths in your data structure, providing autocomplete and type checking.
+</Note>
+
+## Nested Path Support
+
+Schemas support nested object paths using dot notation. The `NestedPaths<T>` type automatically extracts all valid paths from your data structure:
+
+```typescript
+interface Order {
+  orderId: string
+  customer: {
+    name: string
+    address: {
+      street: string
+      city: string
+      country: string
+    }
+  }
+}
+
+const schema = ExcelSchemaBuilder.create<Order>()
+  .column('customer-name', {
+    key: 'customer.name',
+    label: 'Customer'
+  })
+  .column('country', {
+    key: 'customer.address.country', // Deep nesting supported
+    label: 'Country'
+  })
+  .build()
+```
+
+## Adding Transformers
+
+Transformers convert data values before they're written to Excel. Register transformers with `withTransformers()`:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .withTransformers({
+    uppercase: (value: string) => value.toUpperCase(),
+    formatDate: (value: Date) => value.toLocaleDateString()
+  })
+  .column('name', {
+    key: 'name',
+    transform: 'uppercase' // Reference transformer by name
+  })
+  .build()
+```
+
+See [Transformers](/concepts/transformers) for more details.
+
+## Adding Formatters
+
+Formatters control how values are displayed in Excel (e.g., currency, percentages). Register formatters with `withFormatters()`:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Product>()
+  .withFormatters({
+    currency: '$#,##0.00',
+    percentage: '0.00%'
+  })
+  .column('price', {
+    key: 'price',
+    format: { preset: 'currency' }
+  })
+  .build()
+```
+
+See [Formatters](/concepts/formatters) for more details.
+
+## Column Groups
+
+Groups allow you to dynamically add columns based on context. This is useful for conditional columns:
+
+```typescript
+interface Report {
+  product: string
+  sales: number
+}
+
+const schema = ExcelSchemaBuilder.create<Report>()
+  .column('product', {
+    key: 'product',
+    label: 'Product'
+  })
+  .group('group:regional', (builder, context: { showRegion: boolean }) => {
+    if (context.showRegion) {
+      builder.column('region', {
+        key: 'product',
+        label: 'Region'
+      })
+    }
+  })
+  .build()
+```
+
+<Info>
+Group keys must be prefixed with `group:` to distinguish them from regular columns. Context is provided when creating tables.
+</Info>
+
+## Type Safety
+
+The schema builder prevents duplicate column keys at compile time:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('name', { key: 'name' })
+  .column('name', { key: 'email' }) // ❌ TypeScript error: 'name' already used
+  .build()
+```
+
+## Building the Schema
+
+Call `.build()` to finalize your schema and get a typed `ExcelSchema` object:
+
+```typescript
+const schema = ExcelSchemaBuilder.create<User>()
+  .column('id', { key: 'id' })
+  .column('name', { key: 'name' })
+  .build()
+
+// Schema type: ExcelSchema<User, 'id' | 'name', 'id' | 'name'>
+```
+
+The built schema contains:
+- `columns`: Array of column definitions (including resolved groups)
+- `formatPresets`: Map of registered formatters
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Columns" icon="table-columns" href="/concepts/columns">
+    Learn about column configuration options
+  </Card>
+  <Card title="Transformers" icon="rotate" href="/concepts/transformers">
+    Transform data values before export
+  </Card>
+  <Card title="Formatters" icon="palette" href="/concepts/formatters">
+    Format cell display in Excel
+  </Card>
+</CardGroup>

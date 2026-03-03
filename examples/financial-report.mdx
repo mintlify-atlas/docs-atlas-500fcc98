@@ -1,0 +1,263 @@
+---
+title: 'Financial Report'
+description: 'Build complex financial reports with nested data, summaries, and conditional styling'
+---
+
+## Overview
+
+This example demonstrates advanced features for creating financial reports:
+
+- Transforming nested array data into multiple rows
+- Adding column summaries with custom calculations
+- Applying conditional cell styling based on data values
+- Formatting currency and percentages
+
+## Data Structure
+
+Define interfaces for a financial report with department-level details:
+
+```typescript
+interface DepartmentData {
+  name: string
+  revenue: number
+  expenses: number
+  profit: number
+  profitMargin: number
+}
+
+interface FinancialReport {
+  month: string
+  departments: DepartmentData[]
+  totalRevenue: number
+  totalExpenses: number
+  totalProfit: number
+  averageProfitMargin: number
+}
+```
+
+## Schema with Nested Data
+
+Create a schema that expands nested arrays into multiple rows:
+
+```typescript
+import { ExcelSchemaBuilder } from '@chronicstone/typed-xlsx'
+
+const financialReportSchema = ExcelSchemaBuilder.create<FinancialReport>()
+  .column('month', { 
+    key: 'month', 
+    label: 'Month', 
+    format: 'MMM YYYY' 
+  })
+  .column('Department Name', {
+    key: 'departments',
+    label: 'Department',
+    transform: departments => departments.map(d => d.name),
+  })
+  .column('Revenue', {
+    key: 'departments',
+    label: 'Revenue',
+    transform: departments => departments.map(d => d.revenue),
+    format: '$#,##0.00',
+  })
+  .column('Expenses', {
+    key: 'departments',
+    label: 'Expenses',
+    transform: departments => departments.map(d => d.expenses),
+    format: '$#,##0.00',
+  })
+  .column('Profit', {
+    key: 'departments',
+    label: 'Profit',
+    transform: departments => departments.map(d => d.profit),
+    format: '$#,##0.00',
+    cellStyle: (data, _, valueIndex) => ({
+      font: { 
+        color: { 
+          rgb: data.departments[valueIndex].profit >= 0 ? '007500' : 'FF0000' 
+        } 
+      },
+    }),
+  })
+  .column('Profit Margin', {
+    key: 'departments',
+    label: 'Profit Margin',
+    transform: departments => departments.map(d => `${d.profitMargin}%`),
+    cellStyle: (data, _, valueIndex) => ({
+      font: { 
+        color: { 
+          rgb: data.departments[valueIndex].profitMargin >= 0 ? '007500' : 'FF0000' 
+        } 
+      },
+    }),
+  })
+  .build()
+```
+
+<Note>
+  When a transform returns an array, typed-xlsx automatically creates multiple rows with proper cell merging for columns that don't return arrays.
+</Note>
+
+## Adding Column Summaries
+
+Add summary rows that calculate totals and averages:
+
+```typescript
+const financialReportSchema = ExcelSchemaBuilder.create<FinancialReport>()
+  // ... other columns
+  .column('totalRevenue', {
+    key: 'totalRevenue',
+    label: 'Total Revenue',
+    format: '$#,##0.00',
+    summary: [
+      {
+        value: data => data.reduce((acc, item) => acc + item.totalRevenue, 0),
+        format: () => '$#,##0.00',
+      },
+    ],
+  })
+  .column('totalExpenses', {
+    key: 'totalExpenses',
+    label: 'Total Expenses',
+    format: '$#,##0.00',
+    summary: [
+      {
+        value: data => data.reduce((acc, item) => acc + item.totalExpenses, 0),
+        format: () => '$#,##0.00',
+      },
+    ],
+  })
+  .column('totalProfit', {
+    key: 'totalProfit',
+    label: 'Total Profit',
+    format: '$#,##0.00',
+    summary: [
+      {
+        value: data => data.reduce((acc, item) => acc + item.totalProfit, 0),
+        format: () => '$#,##0.00',
+        cellStyle: data => ({
+          font: { 
+            color: { 
+              rgb: data.reduce((acc, item) => acc + item.totalProfit, 0) >= 0 
+                ? '007500' 
+                : 'FF0000' 
+            } 
+          },
+        }),
+      },
+    ],
+    cellStyle: data => ({
+      font: { 
+        color: { rgb: data.totalProfit >= 0 ? '007500' : 'FF0000' } 
+      },
+    }),
+  })
+  .column('averageProfitMargin', {
+    key: 'averageProfitMargin',
+    label: 'Average Profit Margin',
+    format: '0.00%',
+    summary: [
+      {
+        value: data => data.reduce((acc, item) => acc + item.averageProfitMargin, 0) / data.length,
+        format: () => '0.00%',
+        cellStyle: data => ({
+          font: { 
+            color: { 
+              rgb: data.reduce((acc, item) => acc + item.averageProfitMargin, 0) / data.length >= 0 
+                ? '007500' 
+                : 'FF0000' 
+            } 
+          },
+        }),
+      },
+    ],
+    cellStyle: data => ({
+      font: { 
+        color: { rgb: data.averageProfitMargin >= 0 ? '007500' : 'FF0000' } 
+      },
+    }),
+  })
+  .build()
+```
+
+<Tip>
+  Summary functions receive the entire dataset, allowing you to calculate aggregates like sums, averages, min/max, etc.
+</Tip>
+
+## Generate Sample Data
+
+Create realistic financial data:
+
+```typescript
+const financialData: FinancialReport[] = [
+  {
+    month: '2024-01',
+    departments: [
+      { name: 'Sales', revenue: 150000, expenses: 50000, profit: 100000, profitMargin: 66.67 },
+      { name: 'Marketing', revenue: 80000, expenses: 60000, profit: 20000, profitMargin: 25.00 },
+      { name: 'R&D', revenue: 120000, expenses: 90000, profit: 30000, profitMargin: 25.00 },
+    ],
+    totalRevenue: 350000,
+    totalExpenses: 200000,
+    totalProfit: 150000,
+    averageProfitMargin: 0.3889,
+  },
+  {
+    month: '2024-02',
+    departments: [
+      { name: 'Sales', revenue: 160000, expenses: 52000, profit: 108000, profitMargin: 67.50 },
+      { name: 'Marketing', revenue: 85000, expenses: 62000, profit: 23000, profitMargin: 27.06 },
+      { name: 'R&D', revenue: 125000, expenses: 88000, profit: 37000, profitMargin: 29.60 },
+    ],
+    totalRevenue: 370000,
+    totalExpenses: 202000,
+    totalProfit: 168000,
+    averageProfitMargin: 0.4139,
+  },
+]
+```
+
+## Build the Report
+
+Generate the Excel file:
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+import fs from 'node:fs'
+
+const buffer = ExcelBuilder.create()
+  .sheet('Financial Report')
+  .addTable({
+    data: financialData,
+    schema: financialReportSchema,
+  })
+  .build({ output: 'buffer' })
+
+fs.writeFileSync('financial-report.xlsx', buffer)
+```
+
+## Conditional Styling
+
+The example uses conditional styling to color values:
+
+- **Green text** (`007500`) for positive profits and margins
+- **Red text** (`FF0000`) for negative values
+
+```typescript
+cellStyle: (data, _, valueIndex) => ({
+  font: { 
+    color: { 
+      rgb: data.departments[valueIndex].profit >= 0 ? '007500' : 'FF0000' 
+    } 
+  },
+})
+```
+
+<Note>
+  The `cellStyle` function receives the row data, column index, and value index (for array transforms), allowing for dynamic styling based on any data condition.
+</Note>
+
+## Next Steps
+
+- Explore [multi-sheet workbooks](/examples/multi-sheet) for organizing multiple reports
+- Learn about [column selection](/advanced/column-selection) to create different views
+- Discover [custom formatters](/schema/formatters) for reusable format presets

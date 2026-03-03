@@ -1,0 +1,368 @@
+---
+title: 'User Data Export'
+description: 'Transform complex user data with custom transformers, nested paths, and dynamic columns'
+---
+
+## Overview
+
+This example demonstrates how to export complex user data with:
+
+- Reusable custom transformers
+- Nested property access
+- Array transformations
+- Conditional cell styling
+- Default values for optional fields
+- Dynamic column groups with context
+
+## Data Structure
+
+Define interfaces for users with nested organizations and results:
+
+```typescript
+interface Organization {
+  id: number
+  name: string
+}
+
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  roles: string[]
+  organizations: Organization[]
+  results: {
+    general: { overall: number }
+    technical: { overall: number }
+    interview?: { overall: number }
+  }
+  createdAt: Date
+  balance: number
+}
+```
+
+## Define Custom Transformers
+
+Create reusable transformers for common data operations:
+
+```typescript
+import type { TransformersMap } from '@chronicstone/typed-xlsx'
+
+const transformers = {
+  boolean: (value: boolean) => value ? 'Yes' : 'No',
+  list: (value: string[]) => value.join(', '),
+  arrayLength: (value: any[]) => value.length,
+} satisfies TransformersMap
+```
+
+<Tip>
+  Transformers are type-safe - TypeScript will ensure the transformer signature matches the data type being transformed.
+</Tip>
+
+## Build the Schema
+
+Create a comprehensive schema with various column types:
+
+```typescript
+import { ExcelSchemaBuilder } from '@chronicstone/typed-xlsx'
+
+const userExportSchema = ExcelSchemaBuilder
+  .create<User>()
+  .withTransformers(transformers)
+  .column('id', { 
+    key: 'id',
+    summary: [
+      { value: () => 'TOTAL BEFORE VAT' }, 
+      { value: () => 'TOTAL' }
+    ],
+  })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .column('roles', {
+    key: 'roles',
+    transform: 'list',
+    cellStyle: data => ({ 
+      font: { 
+        color: { 
+          rgb: data.roles.includes('admin') ? 'd10808' : undefined 
+        } 
+      } 
+    }),
+  })
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00_);\\("$"#,##0.00\\)',
+    summary: [
+      {
+        value: data => data.reduce((acc, user) => acc + user.balance, 0),
+        format: '"$"#,##0.00_);\\("$"#,##0.00\\)',
+      },
+      {
+        value: data => data.reduce((acc, user) => acc + user.balance, 0) * 1.2,
+        format: '"$"#,##0.00_);\\("$"#,##0.00\\)',
+      },
+    ],
+  })
+  .column('nbOrgs', { 
+    key: 'organizations', 
+    transform: 'arrayLength' 
+  })
+  .column('orgs', { 
+    key: 'organizations', 
+    transform: org => org.map(o => o.name).join(', ') 
+  })
+  .build()
+```
+
+## Nested Property Access
+
+Access deeply nested properties using dot notation:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('generalScore', {
+    key: 'results.general.overall',
+    format: '# / 10',
+    summary: [{
+      value: data => data.reduce((acc, user) => acc + user.results.general.overall, 0) / data.length,
+      format: '# / 10',
+    }],
+  })
+  .column('technicalScore', {
+    key: 'results.technical.overall',
+    summary: [{
+      value: data => data.reduce((acc, user) => acc + user.results.technical.overall, 0) / data.length,
+    }],
+  })
+  .column('interviewScore', { 
+    key: 'results.interview.overall', 
+    default: 'N/A' 
+  })
+  .column('createdAt', { 
+    key: 'createdAt', 
+    format: 'd mmm yyyy' 
+  })
+  .build()
+```
+
+<Note>
+  The `default` property provides a fallback value when the field is undefined or null. This is particularly useful for optional fields.
+</Note>
+
+## Dynamic Column Groups
+
+Create columns dynamically based on runtime context:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  // ... other columns
+  .group('group:org', (builder, context: Organization[]) => {
+    for (const org of context) {
+      builder
+        .column(`orga-${org.id}`, {
+          label: `User in ${org.name}`,
+          key: 'organizations',
+          transform: orgs => orgs.some(o => o.id === org.id) ? 'YES' : 'NO',
+          cellStyle: data => ({
+            font: {
+              color: { 
+                rgb: data.organizations.some(o => o.id === org.id) 
+                  ? '61eb34' 
+                  : 'd10808' 
+              },
+            },
+          }),
+        })
+    }
+  })
+  .build()
+```
+
+## Generate with Context
+
+Provide context when building the Excel file:
+
+```typescript
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+const organizations: Organization[] = [
+  { id: 1, name: 'Acme Corp' },
+  { id: 2, name: 'TechStart Inc' },
+  { id: 3, name: 'Global Solutions' },
+]
+
+const users: User[] = [
+  {
+    id: 1,
+    firstName: 'John',
+    lastName: 'Doe',
+    email: 'john@example.com',
+    roles: ['admin', 'user'],
+    organizations: [organizations[0], organizations[2]],
+    results: {
+      general: { overall: 8 },
+      technical: { overall: 9 },
+      interview: { overall: 7 },
+    },
+    balance: 50000,
+    createdAt: new Date('2023-01-15'),
+  },
+  // ... more users
+]
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users - Full')
+  .addTable({
+    data: users,
+    schema: userExportSchema,
+    context: {
+      'group:org': organizations,
+    },
+  })
+  .build({ output: 'buffer' })
+```
+
+<Tip>
+  Context groups allow you to generate columns dynamically at runtime. This is perfect for scenarios like role-based columns, category filters, or any data-driven column generation.
+</Tip>
+
+## Conditional Styling
+
+Apply different styles based on data values:
+
+```typescript
+// Highlight admin users in red
+.column('roles', {
+  key: 'roles',
+  transform: 'list',
+  cellStyle: data => ({ 
+    font: { 
+      color: { 
+        rgb: data.roles.includes('admin') ? 'd10808' : undefined 
+      } 
+    } 
+  }),
+})
+
+// Color-code organization membership
+cellStyle: data => ({
+  font: {
+    color: { 
+      rgb: data.organizations.some(o => o.id === org.id) 
+        ? '61eb34'  // Green for member
+        : 'd10808'  // Red for non-member
+    },
+  },
+})
+```
+
+## Complete Example
+
+Here's a full working example:
+
+```typescript
+import fs from 'node:fs'
+import { ExcelBuilder, ExcelSchemaBuilder } from '@chronicstone/typed-xlsx'
+import type { TransformersMap } from '@chronicstone/typed-xlsx'
+
+interface Organization {
+  id: number
+  name: string
+}
+
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  roles: string[]
+  organizations: Organization[]
+  balance: number
+  createdAt: Date
+}
+
+const transformers = {
+  list: (value: string[]) => value.join(', '),
+  arrayLength: (value: any[]) => value.length,
+} satisfies TransformersMap
+
+const organizations: Organization[] = [
+  { id: 1, name: 'Acme Corp' },
+  { id: 2, name: 'TechStart Inc' },
+]
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .withTransformers(transformers)
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('lastName', { key: 'lastName' })
+  .column('email', { key: 'email' })
+  .column('roles', {
+    key: 'roles',
+    transform: 'list',
+    cellStyle: data => ({ 
+      font: { 
+        color: { 
+          rgb: data.roles.includes('admin') ? 'd10808' : undefined 
+        } 
+      } 
+    }),
+  })
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00',
+  })
+  .column('nbOrgs', { 
+    key: 'organizations', 
+    transform: 'arrayLength' 
+  })
+  .column('createdAt', { 
+    key: 'createdAt', 
+    format: 'd mmm yyyy' 
+  })
+  .group('group:org', (builder, context: Organization[]) => {
+    for (const org of context) {
+      builder.column(`orga-${org.id}`, {
+        label: `In ${org.name}`,
+        key: 'organizations',
+        transform: orgs => orgs.some(o => o.id === org.id) ? 'YES' : 'NO',
+      })
+    }
+  })
+  .build()
+
+const users: User[] = [
+  {
+    id: 1,
+    firstName: 'John',
+    lastName: 'Doe',
+    email: 'john@example.com',
+    roles: ['admin'],
+    organizations: [organizations[0]],
+    balance: 50000,
+    createdAt: new Date('2023-01-15'),
+  },
+]
+
+const buffer = ExcelBuilder.create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema,
+    context: { 'group:org': organizations },
+  })
+  .build({ output: 'buffer' })
+
+fs.writeFileSync('users.xlsx', buffer)
+```
+
+## Next Steps
+
+- Learn about [column selection](/advanced/column-selection) for partial exports
+- Explore [custom formatters](/schema/formatters) for reusable format presets
+- See [multi-sheet examples](/examples/multi-sheet) for organizing data across sheets

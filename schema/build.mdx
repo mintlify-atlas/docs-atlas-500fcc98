@@ -1,0 +1,411 @@
+---
+title: 'Building the Schema'
+description: 'Finalize your schema and use it with ExcelBuilder'
+---
+
+## Overview
+
+Once you've defined all columns, transformers, formatters, and groups, call the `build()` method to create a finalized `ExcelSchema` that can be used with `ExcelBuilder` to generate Excel files.
+
+## The build() Method
+
+### Method Signature
+
+```ts
+build(): ExcelSchema<T, KeyPaths, UsedKeys, ContextMap>
+```
+
+**Returns**: An `ExcelSchema` object containing:
+- `columns`: Array of all column and group definitions
+- `formatPresets`: Map of registered formatter presets
+
+### Basic Example
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('firstName', { key: 'firstName' })
+  .column('email', { key: 'email' })
+  .build() // ✅ Creates ExcelSchema<User, ...>
+```
+
+## Using the Schema
+
+After building your schema, use it with `ExcelBuilder` to create Excel files:
+
+```ts
+import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({
+    data: users,
+    schema: schema
+  })
+  .build({ output: 'buffer' })
+```
+
+## Complete Workflow Example
+
+<Steps>
+  <Step title="Define Your Data Type">
+    ```ts
+    interface Organization {
+      id: number
+      name: string
+    }
+
+    interface User {
+      id: number
+      firstName: string
+      lastName: string
+      email: string
+      roles: string[]
+      organizations: Organization[]
+      balance: number
+      createdAt: Date
+      results: {
+        general: { overall: number }
+        technical: { overall: number }
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Define Transformers and Formatters">
+    ```ts
+    import { TransformersMap, FormattersMap } from '@chronicstone/typed-xlsx'
+
+    const transformers = {
+      boolean: (value: boolean) => value ? 'Yes' : 'No',
+      list: (value: string[]) => value.join(', '),
+      arrayLength: (value: any[]) => value.length,
+    } satisfies TransformersMap
+
+    const formatters = {
+      currency: '"$"#,##0.00_);\\("$"#,##0.00\\)',
+      date: 'd mmm yyyy',
+      score: '# " / 10"',
+    } satisfies FormattersMap
+    ```
+  </Step>
+
+  <Step title="Build the Schema">
+    ```ts
+    const userExportSchema = ExcelSchemaBuilder
+      .create<User>()
+      .withTransformers(transformers)
+      .withFormatters(formatters)
+      .column('id', {
+        key: 'id',
+        summary: [{ value: () => 'TOTAL' }]
+      })
+      .column('firstName', { key: 'firstName' })
+      .column('lastName', { key: 'lastName' })
+      .column('email', { key: 'email' })
+      .column('roles', {
+        key: 'roles',
+        transform: 'list',
+        cellStyle: (data) => ({
+          font: {
+            color: { rgb: data.roles.includes('admin') ? 'd10808' : '000000' }
+          }
+        })
+      })
+      .column('balance', {
+        key: 'balance',
+        format: { preset: 'currency' },
+        summary: [
+          {
+            value: (data) => data.reduce((sum, user) => sum + user.balance, 0),
+            format: { preset: 'currency' }
+          }
+        ]
+      })
+      .column('nbOrgs', {
+        key: 'organizations',
+        transform: 'arrayLength'
+      })
+      .column('generalScore', {
+        key: 'results.general.overall',
+        format: { preset: 'score' },
+        summary: [
+          {
+            value: (data) => {
+              const sum = data.reduce((acc, user) => acc + user.results.general.overall, 0)
+              return sum / data.length
+            },
+            format: { preset: 'score' }
+          }
+        ]
+      })
+      .column('technicalScore', {
+        key: 'results.technical.overall',
+        format: { preset: 'score' },
+        summary: [
+          {
+            value: (data) => {
+              const sum = data.reduce((acc, user) => acc + user.results.technical.overall, 0)
+              return sum / data.length
+            },
+            format: { preset: 'score' }
+          }
+        ]
+      })
+      .column('createdAt', {
+        key: 'createdAt',
+        format: { preset: 'date' }
+      })
+      .group('group:org', (builder, context: Organization[]) => {
+        for (const org of context) {
+          builder.column(`org-${org.id}`, {
+            label: `Member of ${org.name}`,
+            key: 'organizations',
+            transform: (orgs) => orgs.some(o => o.id === org.id) ? 'YES' : 'NO',
+            cellStyle: (data) => ({
+              font: {
+                color: {
+                  rgb: data.organizations.some(o => o.id === org.id)
+                    ? '61eb34'
+                    : 'd10808'
+                }
+              }
+            })
+          })
+        }
+      })
+      .build() // ✅ Finalize the schema
+    ```
+  </Step>
+
+  <Step title="Create Excel File">
+    ```ts
+    import { ExcelBuilder } from '@chronicstone/typed-xlsx'
+
+    const organizations: Organization[] = [
+      { id: 1, name: 'Acme Corp' },
+      { id: 2, name: 'TechStart Inc' },
+      { id: 3, name: 'Global Solutions' }
+    ]
+
+    const buffer = ExcelBuilder
+      .create()
+      .sheet('Users - Full Export')
+      .addTable({
+        data: users,
+        schema: userExportSchema,
+        context: {
+          'group:org': organizations // Required for dynamic groups
+        }
+      })
+      .sheet('Users - Partial Export')
+      .addTable({
+        data: users,
+        schema: userExportSchema,
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+          balance: true
+        }
+      })
+      .build({ output: 'buffer' })
+
+    // Write to file
+    import * as fs from 'fs'
+    fs.writeFileSync('users-export.xlsx', buffer)
+    ```
+  </Step>
+</Steps>
+
+## Schema Reusability
+
+Once built, a schema can be reused across multiple exports:
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('name', { key: 'name' })
+  .build()
+
+// Use in multiple places
+const exportA = ExcelBuilder
+  .create()
+  .sheet('Active Users')
+  .addTable({ data: activeUsers, schema })
+  .build({ output: 'buffer' })
+
+const exportB = ExcelBuilder
+  .create()
+  .sheet('Inactive Users')
+  .addTable({ data: inactiveUsers, schema })
+  .build({ output: 'buffer' })
+```
+
+## Type Safety
+
+The built schema carries full type information:
+
+```ts
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .group('group:org', (builder, context: Organization[]) => {
+    // ...
+  })
+  .build()
+
+// ✅ Type-safe usage
+ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({
+    data: users,          // Must be User[]
+    schema: schema,
+    context: {
+      'group:org': orgs   // Must be Organization[]
+    }
+  })
+  .build({ output: 'buffer' })
+
+// ❌ Type errors
+ExcelBuilder
+  .create()
+  .sheet('Users')
+  .addTable({
+    data: products,       // ❌ Wrong type
+    schema: schema,
+    context: {
+      'group:org': "invalid" // ❌ Wrong context type
+    }
+  })
+  .build({ output: 'buffer' })
+```
+
+## What Happens During Build?
+
+The `build()` method performs several operations:
+
+1. **Resolves Transformers**: Converts transformer string references to actual functions
+2. **Validates Column Keys**: Ensures no duplicate column or group keys
+3. **Freezes Configuration**: Creates an immutable schema object
+4. **Captures Type Information**: Preserves all type metadata for downstream usage
+
+<Note>
+  After calling `build()`, the schema is immutable. You cannot add more columns or modify the configuration. To create a variant, start a new schema builder.
+</Note>
+
+## Schema Object Structure
+
+The returned `ExcelSchema` object has this structure:
+
+```ts
+interface ExcelSchema<T, KeyPaths, UsedKeys, ContextMap> {
+  columns: Array<Column<...> | ColumnGroup<...>>
+  formatPresets: FormattersMap
+}
+```
+
+- **`columns`**: Array containing all column and group definitions in the order they were added
+- **`formatPresets`**: Map of formatter presets registered with `withFormatters()`
+
+## Error Handling
+
+The schema builder throws errors for common mistakes:
+
+```ts
+// ❌ Duplicate column key
+ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('id', { key: 'email' })
+  .build()
+// Error: Column with key 'id' already exists.
+
+// ❌ Duplicate group key
+ExcelSchemaBuilder
+  .create<User>()
+  .group('group:org', (builder, context: Organization[]) => {})
+  .group('group:org', (builder, context: Region[]) => {})
+  .build()
+// Error: Column with key 'group:org' already exists.
+
+// ❌ Group key doesn't start with 'group:'
+ExcelSchemaBuilder
+  .create<User>()
+  .group('organizations', (builder, context: Organization[]) => {})
+  .build()
+// Type error: Key must match pattern `group:${string}`
+```
+
+## Best Practices
+
+### 1. Define Schemas as Constants
+
+```ts
+export const USER_EXPORT_SCHEMA = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', { key: 'id' })
+  .column('name', { key: 'name' })
+  .build()
+```
+
+### 2. Use Factory Functions for Dynamic Schemas
+
+```ts
+export function createUserSchema(options: { includeBalance: boolean }) {
+  const builder = ExcelSchemaBuilder
+    .create<User>()
+    .column('id', { key: 'id' })
+    .column('name', { key: 'name' })
+
+  if (options.includeBalance) {
+    builder.column('balance', { key: 'balance', format: '"$"#,##0.00' })
+  }
+
+  return builder.build()
+}
+```
+
+### 3. Organize Large Schemas
+
+```ts
+// schemas/user-base.ts
+export const baseUserColumns = (builder: ExcelSchemaBuilder<User>) =>
+  builder
+    .column('id', { key: 'id' })
+    .column('firstName', { key: 'firstName' })
+    .column('lastName', { key: 'lastName' })
+
+// schemas/user-export.ts
+export const userExportSchema = baseUserColumns(
+  ExcelSchemaBuilder.create<User>()
+)
+  .column('balance', { key: 'balance' })
+  .column('createdAt', { key: 'createdAt' })
+  .build()
+```
+
+<Warning>
+  Always call `build()` before using a schema with `ExcelBuilder`. Attempting to use an unbuilt schema builder will result in type errors.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="ExcelBuilder" icon="file-excel" href="/builder/create-builder">
+    Learn how to use your schema with ExcelBuilder
+  </Card>
+  <Card title="Define Columns" icon="table-columns" href="/schema/define-columns">
+    Review column definition options
+  </Card>
+  <Card title="Dynamic Columns" icon="layer-group" href="/schema/dynamic-columns">
+    Understand dynamic column groups
+  </Card>
+  <Card title="Examples" icon="code" href="/examples/basic-export">
+    See complete usage examples
+  </Card>
+</CardGroup>

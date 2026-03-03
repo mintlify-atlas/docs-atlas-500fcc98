@@ -1,0 +1,366 @@
+---
+title: 'Dynamic Cell Styling'
+description: 'Apply conditional formatting and row-based styling to your Excel cells'
+icon: 'palette'
+---
+
+## Overview
+
+Typed-xlsx provides powerful dynamic styling capabilities that allow you to conditionally format cells based on row data, row index, or sub-row index. This enables sophisticated visual presentations like color coding, conditional formatting, and data-driven styling.
+
+## Basic Cell Styling
+
+Apply static styles using the `cellStyle` property:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('email', {
+    key: 'email',
+    cellStyle: {
+      font: { color: { rgb: '0066cc' }, underline: true },
+      alignment: { horizontal: 'left' }
+    }
+  })
+  .build()
+```
+
+## Dynamic Row-Based Styling
+
+Use function-based styling to conditionally format cells:
+
+```typescript
+interface User {
+  id: number
+  firstName: string
+  roles: string[]
+  balance: number
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('roles', {
+    key: 'roles',
+    transform: (roles) => roles.join(', '),
+    cellStyle: (data) => ({
+      font: { 
+        color: { rgb: data.roles.includes('admin') ? 'd10808' : '000000' },
+        bold: data.roles.includes('admin')
+      }
+    })
+  })
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00',
+    cellStyle: (data) => ({
+      fill: { 
+        fgColor: { rgb: data.balance < 0 ? 'ffcccc' : 'ccffcc' } 
+      },
+      font: {
+        color: { rgb: data.balance < 0 ? 'd10808' : '61eb34' }
+      }
+    })
+  })
+  .build()
+```
+
+<Tip>
+  The styling function receives the entire row data object, giving you access to any field for conditional logic.
+</Tip>
+
+## Styling Function Signature
+
+The `cellStyle` function receives three parameters:
+
+```typescript
+type CellStyleFunction = (
+  rowData: T,        // The entire row object
+  rowIndex: number,  // Zero-based row index
+  subRowIndex: number // Zero-based sub-row index (for multi-row cells)
+) => CellStyle
+```
+
+### Using Row Index
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('id', {
+    key: 'id',
+    cellStyle: (data, rowIndex) => ({
+      fill: { 
+        fgColor: { rgb: rowIndex % 2 === 0 ? 'f0f0f0' : 'ffffff' } 
+      }
+    })
+  })
+  .build()
+```
+
+### Using Sub-Row Index
+
+When cells contain array values that span multiple rows:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('tasks', {
+    key: 'tasks', // Returns string[]
+    cellStyle: (data, rowIndex, subRowIndex) => ({
+      font: { 
+        bold: subRowIndex === 0, // Bold first task only
+        color: { rgb: subRowIndex === 0 ? '000000' : '666666' }
+      }
+    })
+  })
+  .build()
+```
+
+## Available Style Properties
+
+The `CellStyle` interface from xlsx-js-style supports:
+
+<Accordion title="Font Properties">
+  ```typescript
+  font: {
+    name?: string           // Font name (e.g., 'Arial')
+    sz?: number            // Font size
+    color?: { rgb: string } // Hex color without #
+    bold?: boolean
+    italic?: boolean
+    underline?: boolean
+    strike?: boolean
+  }
+  ```
+</Accordion>
+
+<Accordion title="Fill Properties">
+  ```typescript
+  fill: {
+    fgColor?: { rgb: string } // Hex color without #
+    bgColor?: { rgb: string }
+    patternType?: 'solid' | 'darkGray' | 'mediumGray' | 'lightGray' | 'gray125' | 'gray0625'
+  }
+  ```
+</Accordion>
+
+<Accordion title="Alignment Properties">
+  ```typescript
+  alignment: {
+    horizontal?: 'left' | 'center' | 'right' | 'fill' | 'justify'
+    vertical?: 'top' | 'center' | 'bottom' | 'justify'
+    wrapText?: boolean
+    textRotation?: number
+  }
+  ```
+</Accordion>
+
+<Accordion title="Border Properties">
+  ```typescript
+  border: {
+    top?: { style: 'thin' | 'medium' | 'thick', color: { rgb: string } }
+    left?: { style: 'thin' | 'medium' | 'thick', color: { rgb: string } }
+    bottom?: { style: 'thin' | 'medium' | 'thick', color: { rgb: string } }
+    right?: { style: 'thin' | 'medium' | 'thick', color: { rgb: string } }
+  }
+  ```
+</Accordion>
+
+## Header Styling
+
+Customize column header appearance:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('priority', {
+    key: 'priority',
+    headerStyle: {
+      font: { color: { rgb: 'ffffff' }, bold: true },
+      fill: { fgColor: { rgb: 'd10808' } },
+      alignment: { horizontal: 'center' }
+    }
+  })
+  .build()
+```
+
+## Dynamic Title Styling
+
+Apply conditional styling to table titles:
+
+```typescript
+const buffer = ExcelBuilder
+  .create()
+  .sheet('Styled Report')
+  .addTable({
+    title: 'User Report',
+    titleStyle: (data) => ({
+      font: { 
+        sz: 20,
+        color: { rgb: data.length > 100 ? 'd10808' : '61eb34' } 
+      },
+      fill: { 
+        fgColor: { rgb: data.length > 100 ? 'ffcccc' : 'ccffcc' } 
+      }
+    }),
+    data: users,
+    schema: userSchema
+  })
+  .build({ output: 'buffer' })
+```
+
+<Warning>
+  Color values in xlsx-js-style use RGB hex format **without** the `#` prefix. Use `'ff0000'` instead of `'#ff0000'`.
+</Warning>
+
+## Complex Styling Patterns
+
+### Multi-Condition Styling
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<Transaction>()
+  .column('amount', {
+    key: 'amount',
+    format: '"$"#,##0.00',
+    cellStyle: (data) => {
+      if (data.amount > 10000) {
+        return {
+          font: { color: { rgb: '61eb34' }, bold: true },
+          fill: { fgColor: { rgb: 'e6ffe6' } }
+        }
+      } else if (data.amount < 0) {
+        return {
+          font: { color: { rgb: 'd10808' }, bold: true },
+          fill: { fgColor: { rgb: 'ffe6e6' } }
+        }
+      } else {
+        return {
+          font: { color: { rgb: '000000' } }
+        }
+      }
+    }
+  })
+  .build()
+```
+
+### Cross-Column Conditional Styling
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('status', {
+    key: 'status',
+    cellStyle: (data) => ({
+      font: { 
+        color: { rgb: data.balance < 0 && data.status === 'active' ? 'd10808' : '000000' } 
+      }
+    })
+  })
+  .column('balance', {
+    key: 'balance',
+    cellStyle: (data) => ({
+      font: { 
+        color: { rgb: data.balance < 0 && data.status === 'active' ? 'd10808' : '000000' } 
+      }
+    })
+  })
+  .build()
+```
+
+### Alternating Row Colors
+
+```typescript
+const createStripedColumn = (key: string) => ({
+  key,
+  cellStyle: (_: any, rowIndex: number) => ({
+    fill: { 
+      fgColor: { rgb: rowIndex % 2 === 0 ? 'f9f9f9' : 'ffffff' } 
+    }
+  })
+})
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('firstName', createStripedColumn('firstName'))
+  .column('lastName', createStripedColumn('lastName'))
+  .column('email', createStripedColumn('email'))
+  .build()
+```
+
+## Summary Row Styling
+
+Style summary rows independently:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('balance', {
+    key: 'balance',
+    format: '"$"#,##0.00',
+    summary: [{
+      value: (data) => data.reduce((sum, user) => sum + user.balance, 0),
+      format: '"$"#,##0.00',
+      cellStyle: (data) => ({
+        font: { 
+          bold: true,
+          color: { 
+            rgb: data.reduce((sum, u) => sum + u.balance, 0) < 0 
+              ? 'd10808' 
+              : '61eb34' 
+          }
+        },
+        fill: { fgColor: { rgb: 'E9E9E9' } }
+      })
+    }]
+  })
+  .build()
+```
+
+## Real-World Example
+
+From the library's source:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('roles', {
+    key: 'roles',
+    transform: 'list',
+    cellStyle: data => ({ 
+      font: { 
+        color: { rgb: data.roles.includes('admin') ? 'd10808' : undefined } 
+      } 
+    })
+  })
+  .group('group:org', (builder, context: Organization[]) => {
+    for (const org of context) {
+      builder.column(`orga-${org.id}`, {
+        label: `User in ${org.name}`,
+        key: 'organizations',
+        transform: orgs => orgs.some(o => o.id === org.id) ? 'YES' : 'NO',
+        cellStyle: data => ({
+          font: {
+            color: { 
+              rgb: data.organizations.some(o => o.id === org.id) 
+                ? '61eb34' 
+                : 'd10808' 
+            }
+          }
+        })
+      })
+    }
+  })
+  .build()
+```
+
+## Best Practices
+
+1. **Consistent color schemes**: Use a consistent palette throughout your exports
+2. **Accessibility**: Ensure sufficient contrast between text and background colors
+3. **Performance**: Complex styling functions are called for every cell—keep logic efficient
+4. **Reusable functions**: Extract common styling patterns into reusable functions
+5. **Combine with formatting**: Use both `format` and `cellStyle` for comprehensive cell presentation
+
+<Tip>
+  Use the `deepmerge` utility internally to combine multiple style objects safely, as seen in the library's implementation.
+</Tip>

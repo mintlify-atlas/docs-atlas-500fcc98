@@ -1,0 +1,314 @@
+---
+title: 'Formatters'
+description: 'Type definitions for cell format presets'
+---
+
+## Overview
+
+Formatters define Excel number formats for cells. Unlike transformers (which change the cell value), formatters only change how Excel displays the value.
+
+**Key Difference:**
+- **Transformers**: Convert the value (e.g., `123.45` → `"$123.45"`)
+- **Formatters**: Tell Excel how to format the number (e.g., `123.45` with format `"$#,##0.00"`)
+
+## FormatterFunction
+
+Function that generates Excel format strings based on parameters.
+
+```typescript
+export type FormatterFunction = (params: any) => string
+```
+
+### Parameters
+
+<ParamField path="params" type="any" required>
+  Configuration object passed when using the formatter preset
+</ParamField>
+
+### Returns
+
+<ResponseField name="return" type="string">
+  Excel number format string (e.g., `"$#,##0.00"`, `"0.00%"`, `"mm/dd/yyyy"`)
+</ResponseField>
+
+## FormattersMap
+
+Map of named formatters that can be registered with a schema.
+
+```typescript
+export interface FormattersMap {
+  [key: string]: FormatterFunction | string
+}
+```
+
+Each formatter can be:
+- A **function** that accepts parameters and returns a format string
+- A **string** representing a static format
+
+### Example
+
+```typescript
+const formatters = {
+  // Function-based formatter with parameters
+  currency: (params: { symbol: string; decimals?: number }) => {
+    const decimals = params.decimals ?? 2
+    const zeros = '0'.repeat(decimals)
+    return `${params.symbol}#,##0.${zeros}`
+  },
+  
+  // Static format string
+  percentage: '0.00%',
+  
+  // Date format
+  shortDate: 'mm/dd/yyyy',
+  
+  // Custom number format
+  accounting: (params: { symbol: string }) => 
+    `_-${params.symbol}* #,##0.00_-;-${params.symbol}* #,##0.00_-;_-${params.symbol}* "-"??_-;_-@_-`,
+  
+  // Integer format
+  integer: '#,##0',
+  
+  // Decimal format
+  decimal: (params: { decimals: number }) => 
+    `#,##0.${'0'.repeat(params.decimals)}`
+}
+```
+
+## FormatterPreset
+
+Utility type that creates preset configurations from a `FormattersMap`.
+
+```typescript
+export type FormatterPreset<T extends FormattersMap> = {
+  [Key in keyof T]: ({ preset: Key } & (T[Key] extends infer P
+    ? P extends (params: any) => any
+      ? { params: Parameters<P>[0] }
+      : {}
+    : {}))
+}
+```
+
+This type:
+- Ensures the `preset` key matches a registered formatter
+- Requires `params` if the formatter is a function
+- Type-checks the params structure
+
+### Example
+
+```typescript
+const formatters = {
+  currency: (params: { symbol: string; decimals?: number }) => 
+    `${params.symbol}#,##0.${params.decimals ?? 2}`,
+  percentage: '0.00%'
+}
+
+type Preset = FormatterPreset<typeof formatters>
+// Preset = 
+//   | { preset: 'currency', params: { symbol: string; decimals?: number } }
+//   | { preset: 'percentage' }
+```
+
+## Usage Patterns
+
+### Registering Formatters
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Order>()
+  .withFormatters({
+    currency: (params: { symbol: string }) => `${params.symbol}#,##0.00`,
+    percentage: '0.00%',
+    date: 'mm/dd/yyyy'
+  })
+```
+
+### Using Static Format Presets
+
+```typescript
+schema.column('discount', {
+  label: 'Discount',
+  key: 'discountRate',
+  format: { preset: 'percentage' } // No params needed
+})
+```
+
+### Using Function-Based Presets
+
+```typescript
+schema.column('price', {
+  label: 'Price',
+  key: 'amount',
+  format: { 
+    preset: 'currency', 
+    params: { symbol: '$' } // Type-checked params
+  }
+})
+```
+
+### Using Raw Format Strings
+
+```typescript
+schema.column('total', {
+  label: 'Total',
+  key: 'total',
+  format: '$#,##0.00' // Direct Excel format string
+})
+```
+
+### Dynamic Formatting
+
+```typescript
+schema.column('amount', {
+  label: 'Amount',
+  key: 'value',
+  format: (rowData, rowIndex, subRowIndex) => {
+    // Return preset
+    if (rowData.currency === 'USD') {
+      return { preset: 'currency', params: { symbol: '$' } }
+    }
+    // Or return format string
+    return '€#,##0.00'
+  }
+})
+```
+
+## Format Strings Reference
+
+Excel number format strings use special characters:
+
+<ResponseField name="#">
+  Digit placeholder (only significant digits shown)
+</ResponseField>
+
+<ResponseField name="0">
+  Digit placeholder (zero shown if no digit)
+</ResponseField>
+
+<ResponseField name=",">
+  Thousands separator
+</ResponseField>
+
+<ResponseField name=".">
+  Decimal separator
+</ResponseField>
+
+<ResponseField name="%">
+  Multiply by 100 and show percent sign
+</ResponseField>
+
+<ResponseField name="$" or other text>
+  Literal text
+</ResponseField>
+
+<ResponseField name=";">
+  Section separator (positive; negative; zero; text)
+</ResponseField>
+
+### Common Formats
+
+```typescript
+const commonFormats = {
+  // Currency
+  '$#,##0.00',              // $1,234.56
+  '€#,##0.00',              // €1,234.56
+  '_-$* #,##0.00_-',        // Accounting format
+  
+  // Percentage
+  '0%',                     // 75%
+  '0.0%',                   // 75.5%
+  '0.00%',                  // 75.50%
+  
+  // Numbers
+  '#,##0',                  // 1,234
+  '#,##0.00',               // 1,234.56
+  '0.00',                   // 123.45
+  '#,##0.00;(#,##0.00)',    // 1,234.56 or (1,234.56) for negative
+  
+  // Dates
+  'mm/dd/yyyy',             // 03/15/2024
+  'dd-mmm-yy',              // 15-Mar-24
+  'yyyy-mm-dd',             // 2024-03-15
+  'mmmm d, yyyy',           // March 15, 2024
+  
+  // Time
+  'h:mm AM/PM',             // 2:30 PM
+  'hh:mm:ss',               // 14:30:45
+  
+  // Scientific
+  '0.00E+00',               // 1.23E+03
+  
+  // Fractions
+  '# ?/?',                  // 3 1/4
+  '# ??/??'                 // 3 25/100
+}
+```
+
+## Type Safety
+
+The formatter system provides:
+
+1. **Preset Name Validation**: Only registered formatter names are allowed
+2. **Parameter Type Checking**: Function-based formatters have their params validated
+3. **Format String Safety**: Raw format strings are type-checked as strings
+
+```typescript
+const formatters = {
+  currency: (params: { symbol: string; decimals?: number }) => 
+    `${params.symbol}#,##0.00`
+}
+
+const schema = ExcelSchemaBuilder.create<Order>()
+  .withFormatters(formatters)
+  .column('amount', {
+    key: 'total',
+    format: { 
+      preset: 'currency', 
+      params: { symbol: '$' } // ✓ Valid
+    }
+  })
+  .column('amount2', {
+    key: 'total',
+    format: { 
+      preset: 'currency', 
+      params: { currency: 'USD' } // ✗ Error - wrong param shape
+    }
+  })
+  .column('amount3', {
+    key: 'total',
+    format: { 
+      preset: 'unknown' // ✗ Error - formatter not registered
+    }
+  })
+```
+
+## Formatters vs Transformers
+
+| Aspect | Formatters | Transformers |
+|--------|------------|-------------|
+| **Purpose** | Display formatting | Value conversion |
+| **Changes value?** | No | Yes |
+| **Excel feature** | Number format | Cell value |
+| **Example** | `123.45` displayed as `$123.45` | `123.45` → `"$123.45"` |
+| **Use case** | Numbers, dates, percentages | Arrays, objects, complex types |
+| **Applied at** | Cell format property | Cell value |
+
+```typescript
+// Formatter: Value stays as number, Excel displays it formatted
+schema.column('price', {
+  key: 'amount', // value: 123.45 (number)
+  format: '$#,##0.00' // Excel displays: $123.45
+})
+
+// Transformer: Value is converted to string
+schema.column('price', {
+  key: 'amount',
+  transform: (val: number) => `$${val.toFixed(2)}` // value: "$123.45" (string)
+})
+```
+
+## See Also
+
+- [Column Type](/api/types/column) - Column configuration
+- [Transformers](/api/types/transformers) - Value transformation
+- [ExcelSchemaBuilder](/api/excel-schema-builder) - Registering formatters
+- [Excel Number Formats](https://support.microsoft.com/en-us/office/number-format-codes-5026bbd6-04bc-48cd-bf33-80f18b4eae68) - Microsoft documentation

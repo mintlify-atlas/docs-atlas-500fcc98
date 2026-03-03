@@ -1,0 +1,243 @@
+---
+title: 'ExcelSchemaBuilder'
+description: 'Builder class for creating type-safe Excel schemas with columns, transformers, and formatters'
+---
+
+## Overview
+
+The `ExcelSchemaBuilder` class provides a fluent API for defining Excel schemas with type-safe column definitions, transformers, and formatters. It ensures compile-time type checking for column keys, data paths, and format presets.
+
+## Type Parameters
+
+<ParamField path="T" type="GenericObject">
+  The data type for rows in the Excel sheet
+</ParamField>
+
+<ParamField path="CellKeyPaths" type="string">
+  Valid nested property paths in the data type (e.g., "user.name", "order.total")
+</ParamField>
+
+<ParamField path="UsedKeys" type="string" default="never">
+  Union of already-used column keys to prevent duplicates
+</ParamField>
+
+<ParamField path="TransformMap" type="TransformersMap" default="{}">
+  Map of registered transformer functions
+</ParamField>
+
+<ParamField path="FormatMap" type="FormattersMap" default="{}">
+  Map of registered formatter functions
+</ParamField>
+
+<ParamField path="ContextMap" type="{ [key: string]: any }" default="{}">
+  Map of context types for column groups
+</ParamField>
+
+## Static Methods
+
+### create()
+
+Creates a new `ExcelSchemaBuilder` instance.
+
+```typescript
+public static create<T extends GenericObject, KeyPath extends string = NestedPaths<T>>(): ExcelSchemaBuilder<T, KeyPath>
+```
+
+<ParamField path="T" type="GenericObject">
+  The data type for rows
+</ParamField>
+
+<ParamField path="KeyPath" type="string" default="NestedPaths<T>">
+  Valid nested paths in T (automatically inferred)
+</ParamField>
+
+**Returns:** A new `ExcelSchemaBuilder` instance
+
+**Example:**
+```typescript
+const schema = ExcelSchemaBuilder.create<Order>()
+```
+
+## Instance Methods
+
+### withTransformers()
+
+Registers transformer functions that can be referenced by name in column definitions.
+
+```typescript
+public withTransformers<Transformers extends TransformersMap>(
+  transformers: Transformers
+): ExcelSchemaBuilder<T, CellKeyPaths, UsedKeys, TransformMap & Transformers, FormatMap, ContextMap>
+```
+
+<ParamField path="transformers" type="TransformersMap" required>
+  Object mapping transformer names to transformer functions
+</ParamField>
+
+**Returns:** The builder instance with registered transformers
+
+**Example:**
+```typescript
+const schema = ExcelSchemaBuilder.create<Order>()
+  .withTransformers({
+    currency: (value: number) => `$${value.toFixed(2)}`,
+    uppercase: (value: string) => value.toUpperCase()
+  })
+```
+
+### withFormatters()
+
+Registers formatter presets that can be used for cell formatting.
+
+```typescript
+withFormatters<Formatters extends FormattersMap>(
+  formatters: Formatters
+): ExcelSchemaBuilder<T, CellKeyPaths, UsedKeys, TransformMap, FormatMap & Formatters, ContextMap>
+```
+
+<ParamField path="formatters" type="FormattersMap" required>
+  Object mapping formatter names to formatter functions or format strings
+</ParamField>
+
+**Returns:** The builder instance with registered formatters
+
+**Example:**
+```typescript
+const schema = ExcelSchemaBuilder.create<Order>()
+  .withFormatters({
+    currency: (params: { symbol: string }) => `${params.symbol}#,##0.00`,
+    percentage: '0.00%'
+  })
+```
+
+### column()
+
+Defines a column in the schema.
+
+```typescript
+public column<
+  K extends string,
+  FieldValue extends CellKeyPaths | ((data: T) => CellValue),
+  Preset extends FormatterPreset<FormatMap>[keyof FormatMap]
+>(
+  columnKey: Not<K, UsedKeys>,
+  column: Omit<Column<T, FieldValue, K, TransformMap, FormatMap, Preset>, 'columnKey' | 'type'>
+): ExcelSchemaBuilder<T, CellKeyPaths, UsedKeys | K, TransformMap, FormatMap, ContextMap>
+```
+
+<ParamField path="columnKey" type="string" required>
+  Unique key for the column (compile-time checked for duplicates)
+</ParamField>
+
+<ParamField path="column" type="Column" required>
+  Column configuration object (see [Column type](/api/types/column))
+</ParamField>
+
+**Returns:** The builder instance with the new column added
+
+**Throws:** Error if a column with the same key already exists
+
+**Example:**
+```typescript
+const schema = ExcelSchemaBuilder.create<Order>()
+  .column('orderId', {
+    label: 'Order ID',
+    key: 'id'
+  })
+  .column('customerName', {
+    label: 'Customer',
+    key: 'customer.name'
+  })
+  .column('total', {
+    label: 'Total',
+    key: 'amount',
+    transform: 'currency',
+    format: { preset: 'currency', params: { symbol: '$' } }
+  })
+```
+
+### group()
+
+Defines a column group that can generate dynamic columns based on runtime context.
+
+```typescript
+public group<
+  K extends `group:${string}`,
+  Context
+>(
+  key: Not<K, UsedKeys>,
+  handler: (builder: ExcelSchemaBuilder<T, CellKeyPaths, never, TransformMap, FormatMap>, context: Context) => void
+): ExcelSchemaBuilder<
+  T,
+  CellKeyPaths,
+  UsedKeys | K,
+  TransformMap,
+  FormatMap,
+  ContextMap & { [key in K]: Context }
+>
+```
+
+<ParamField path="key" type="string" required>
+  Unique key for the group (must start with "group:")
+</ParamField>
+
+<ParamField path="handler" type="function" required>
+  Function that defines columns using the provided builder and context
+</ParamField>
+
+**Returns:** The builder instance with the group registered
+
+**Throws:** Error if a column/group with the same key already exists
+
+**Example:**
+```typescript
+interface MonthContext {
+  months: string[]
+}
+
+const schema = ExcelSchemaBuilder.create<SalesData>()
+  .group<'group:months', MonthContext>('group:months', (builder, context) => {
+    context.months.forEach(month => {
+      builder.column(month, {
+        label: month,
+        key: (data) => data.monthlyData[month]
+      })
+    })
+  })
+```
+
+### build()
+
+Builds the final Excel schema object.
+
+```typescript
+public build(): ExcelSchema<T, CellKeyPaths, UsedKeys, ContextMap>
+```
+
+**Returns:** An `ExcelSchema` object that can be used with `ExcelBuilder`
+
+**Example:**
+```typescript
+const schema = ExcelSchemaBuilder.create<Order>()
+  .column('orderId', { label: 'Order ID', key: 'id' })
+  .column('total', { label: 'Total', key: 'amount' })
+  .build()
+```
+
+## Type Safety
+
+The `ExcelSchemaBuilder` provides several layers of type safety:
+
+1. **Duplicate Key Prevention**: Column keys are tracked at the type level to prevent duplicates
+2. **Path Validation**: Data paths are validated against the data type structure
+3. **Transformer Type Checking**: Transformers are only suggested if they accept the column's value type
+4. **Format Preset Validation**: Format presets are type-checked including their parameters
+5. **Context Requirements**: Column groups requiring context enforce that context is provided
+
+## See Also
+
+- [Column Type](/api/types/column) - Column configuration options
+- [Schema Type](/api/types/schema) - Schema structure
+- [Transformers](/api/types/transformers) - Transformer function types
+- [Formatters](/api/types/formatters) - Formatter configuration
+- [ExcelBuilder](/api/excel-builder) - Building Excel workbooks

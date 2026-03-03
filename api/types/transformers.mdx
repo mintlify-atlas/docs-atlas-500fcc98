@@ -1,0 +1,255 @@
+---
+title: 'Transformers'
+description: 'Type definitions for value transformers'
+---
+
+## Overview
+
+Transformers convert data values into Excel cell values. They are especially useful for:
+- Converting complex types (arrays, objects) into displayable values
+- Formatting values consistently across multiple columns
+- Type-safe value transformation with compile-time checking
+
+## ValueTransformer
+
+Function signature for a transformer.
+
+```typescript
+export type ValueTransformer = (value: any, index: number) => CellValue
+```
+
+### Parameters
+
+<ParamField path="value" type="any" required>
+  The value to transform (extracted from the data using the column's `key`)
+</ParamField>
+
+<ParamField path="index" type="number" required>
+  The row index (0-based)
+</ParamField>
+
+### Returns
+
+<ResponseField name="return" type="CellValue">
+  The transformed value. Can be:
+  - A primitive: `string`, `number`, `boolean`, `Date`, `null`, or `undefined`
+  - An array of primitives: `BaseCellValue[]` (creates sub-rows)
+</ResponseField>
+
+## TransformersMap
+
+Map of named transformers that can be registered with a schema.
+
+```typescript
+export interface TransformersMap {
+  [key: string]: ValueTransformer
+}
+```
+
+### Example
+
+```typescript
+const transformers = {
+  // Format currency
+  currency: (value: number) => `$${value.toFixed(2)}`,
+  
+  // Convert array to comma-separated string
+  joinArray: (value: string[]) => value.join(', '),
+  
+  // Format date
+  shortDate: (value: Date) => value.toLocaleDateString('en-US'),
+  
+  // Extract property from object
+  getName: (value: { name: string }) => value.name,
+  
+  // Conditional formatting
+  statusLabel: (value: string) => {
+    const labels = {
+      pending: 'Pending Review',
+      approved: 'Approved',
+      rejected: 'Rejected'
+    }
+    return labels[value] || value
+  },
+  
+  // Create sub-rows from array
+  expandItems: (value: Array<{ name: string; qty: number }>) => 
+    value.map(item => `${item.name} (${item.qty})`)
+}
+```
+
+## TypedTransformersMap
+
+Utility type that filters transformers to only those compatible with a given value type.
+
+```typescript
+export type TypedTransformersMap<TransformMap extends TransformersMap, Value> = {
+  [K in keyof TransformMap]: Value extends Parameters<TransformMap[K]>[0] ? K : never;
+}[keyof TransformMap]
+```
+
+This provides type-safe transformer selection in column definitions.
+
+### Example
+
+```typescript
+interface Order {
+  id: string
+  total: number
+  items: Array<{ name: string }>
+}
+
+const transformers = {
+  currency: (value: number) => `$${value.toFixed(2)}`,
+  joinItems: (value: Array<{ name: string }>) => value.map(i => i.name).join(', ')
+}
+
+const schema = ExcelSchemaBuilder.create<Order>()
+  .withTransformers(transformers)
+  .column('total', {
+    label: 'Total',
+    key: 'total',
+    transform: 'currency' // ✓ Valid - 'total' is number, transformer accepts number
+    // transform: 'joinItems' // ✗ Error - 'total' is number, transformer expects array
+  })
+  .column('items', {
+    label: 'Items',
+    key: 'items',
+    transform: 'joinItems' // ✓ Valid - 'items' matches array type
+  })
+```
+
+## Usage Patterns
+
+### Registering Transformers
+
+```typescript
+const schema = ExcelSchemaBuilder.create<Order>()
+  .withTransformers({
+    currency: (value: number) => `$${value.toFixed(2)}`,
+    percentage: (value: number) => `${(value * 100).toFixed(1)}%`
+  })
+```
+
+### Using Named Transformers
+
+```typescript
+schema.column('amount', {
+  label: 'Amount',
+  key: 'total',
+  transform: 'currency' // References registered transformer
+})
+```
+
+### Using Inline Transformers
+
+```typescript
+schema.column('fullName', {
+  label: 'Full Name',
+  key: 'user',
+  transform: (user: { first: string; last: string }) => `${user.first} ${user.last}`
+})
+```
+
+### Required vs Optional Transform
+
+The `transform` property is:
+- **Required** when the value type is not compatible with `CellValue`
+- **Optional** when the value type is already compatible
+
+```typescript
+interface Product {
+  name: string // Compatible with CellValue
+  price: number // Compatible with CellValue
+  tags: string[] // Array is compatible (will create sub-rows)
+  metadata: { key: string; value: string }[] // Object array NOT compatible
+}
+
+const schema = ExcelSchemaBuilder.create<Product>()
+  .column('name', {
+    key: 'name'
+    // transform is optional - string is compatible
+  })
+  .column('tags', {
+    key: 'tags'
+    // transform is optional - string[] creates sub-rows automatically
+  })
+  .column('metadata', {
+    key: 'metadata',
+    transform: (meta) => meta.map(m => `${m.key}: ${m.value}`)
+    // transform is REQUIRED - object[] is not compatible
+  })
+```
+
+## Creating Sub-Rows
+
+Transformers can return arrays to create sub-rows:
+
+```typescript
+interface Order {
+  id: string
+  items: Array<{ name: string; price: number }>
+}
+
+const schema = ExcelSchemaBuilder.create<Order>()
+  .column('orderId', {
+    label: 'Order',
+    key: 'id'
+    // Single value - no sub-rows
+  })
+  .column('items', {
+    label: 'Items',
+    key: 'items',
+    transform: (items) => items.map(item => item.name)
+    // Returns array - creates sub-rows
+  })
+  .column('prices', {
+    label: 'Price',
+    key: 'items',
+    transform: (items) => items.map(item => item.price)
+    // Array length matches 'items' column
+  })
+
+// Result:
+// | Order | Items    | Price |
+// |-------|----------|-------|
+// | #001  | Item A   | 10.00 |
+// |       | Item B   | 15.00 |
+// |       | Item C   | 12.50 |
+```
+
+## Type Safety
+
+The type system ensures:
+
+1. **Value Type Compatibility**: Transformers are only suggested if they accept the column's value type
+2. **Return Type Validation**: Transformer return types must be `CellValue`
+3. **Required Transform Detection**: Columns with incompatible value types require a transformer
+
+```typescript
+interface Data {
+  count: number
+  tags: Set<string> // Set is not compatible
+}
+
+const schema = ExcelSchemaBuilder.create<Data>()
+  .column('count', {
+    key: 'count'
+    // ✓ No transform needed - number is compatible
+  })
+  .column('tags', {
+    key: 'tags'
+    // ✗ TypeScript error - Set is not compatible, transform required
+  })
+  .column('tagsList', {
+    key: 'tags',
+    transform: (tags: Set<string>) => Array.from(tags).join(', ')
+    // ✓ Transform converts Set to string
+  })
+```
+
+## See Also
+
+- [Column Type](/api/types/column) - Column configuration
+- [Formatters](/api/types/formatters) - Cell formatting (different from transformation)
+- [ExcelSchemaBuilder](/api/excel-schema-builder) - Registering transformers

@@ -1,0 +1,218 @@
+---
+title: 'Working with Nested Data'
+description: 'Learn how to extract and transform nested object properties in your Excel exports'
+icon: 'sitemap'
+---
+
+## Overview
+
+Typed-xlsx provides powerful support for accessing nested object properties using dot notation paths. This feature enables you to extract deeply nested data without manual flattening.
+
+## Nested Path Access
+
+The library uses the `NestedPaths<T>` type to provide type-safe access to nested properties:
+
+```typescript
+interface User {
+  id: number
+  firstName: string
+  results: {
+    general: { overall: number }
+    technical: { overall: number }
+    interview?: { overall: number }
+  }
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('generalScore', {
+    key: 'results.general.overall',
+    format: '# / 10'
+  })
+  .column('technicalScore', {
+    key: 'results.technical.overall',
+    format: '# / 10'
+  })
+  .column('interviewScore', {
+    key: 'results.interview.overall',
+    default: 'N/A'
+  })
+  .build()
+```
+
+## How It Works
+
+The library internally uses a path resolver to extract values:
+
+```typescript
+function getPropertyFromPath(obj: object, path: string) {
+  return path.split('.').reduce((o, i) => o && o[i], obj)
+}
+```
+
+<Tip>
+  When a nested path returns `undefined`, `null`, or an empty value, the column's `default` value will be used if specified.
+</Tip>
+
+## Complex Nested Structures
+
+### Arrays of Objects
+
+When dealing with nested arrays, combine path access with transformers:
+
+```typescript
+interface Organization {
+  id: number
+  name: string
+}
+
+interface User {
+  id: number
+  firstName: string
+  organizations: Organization[]
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('orgNames', {
+    key: 'organizations',
+    transform: (orgs: Organization[]) => orgs.map(o => o.name).join(', ')
+  })
+  .column('orgCount', {
+    key: 'organizations',
+    transform: (orgs: Organization[]) => orgs.length
+  })
+  .build()
+```
+
+### Multiple Levels Deep
+
+Access properties at any depth level:
+
+```typescript
+interface Company {
+  departments: {
+    sales: {
+      regions: {
+        north: { revenue: number }
+        south: { revenue: number }
+      }
+    }
+  }
+}
+
+const schema = ExcelSchemaBuilder
+  .create<Company>()
+  .column('northRevenue', {
+    key: 'departments.sales.regions.north.revenue',
+    format: '"$"#,##0.00'
+  })
+  .build()
+```
+
+## Type Safety
+
+<Warning>
+  The `NestedPaths<T>` type ensures that only valid paths are accepted. Invalid paths will result in TypeScript errors at compile time.
+</Warning>
+
+The type system provides:
+
+1. **Autocomplete**: IDE suggestions for available paths
+2. **Type checking**: Compile-time validation of path existence
+3. **Union type handling**: Proper handling of optional nested properties
+
+## Default Values for Nested Paths
+
+When nested properties might be undefined, always provide a default:
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('interviewScore', {
+    key: 'results.interview.overall', // Optional property
+    default: 'N/A' // Fallback when undefined
+  })
+  .build()
+```
+
+## Best Practices
+
+<Accordion title="Handling Null/Undefined Values">
+  Always use the `default` option for optional nested properties to avoid blank cells:
+
+  ```typescript
+  .column('optionalField', {
+    key: 'deeply.nested.optional.field',
+    default: 'Not Available'
+  })
+  ```
+</Accordion>
+
+<Accordion title="Array Length Transformations">
+  Use shared transformers for common operations like getting array lengths:
+
+  ```typescript
+  const transformers = {
+    arrayLength: (value: any[]) => value.length
+  } satisfies TransformersMap
+
+  const schema = ExcelSchemaBuilder
+    .create<User>()
+    .withTransformers(transformers)
+    .column('numOrgs', {
+      key: 'organizations',
+      transform: 'arrayLength'
+    })
+    .build()
+  ```
+</Accordion>
+
+<Accordion title="Performance Considerations">
+  Deep nested access has minimal performance impact. The path resolver is efficient and only evaluates when building cells.
+</Accordion>
+
+## Common Patterns
+
+### Extracting Multiple Fields from Nested Arrays
+
+```typescript
+interface User {
+  contacts: Array<{
+    type: string
+    value: string
+    verified: boolean
+  }>
+}
+
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('primaryEmail', {
+    key: 'contacts',
+    transform: (contacts) => 
+      contacts.find(c => c.type === 'email')?.value ?? 'N/A'
+  })
+  .column('verifiedContacts', {
+    key: 'contacts',
+    transform: (contacts) => 
+      contacts.filter(c => c.verified).length
+  })
+  .build()
+```
+
+### Conditional Nested Access
+
+```typescript
+const schema = ExcelSchemaBuilder
+  .create<User>()
+  .column('score', {
+    key: (data) => 
+      data.results?.interview?.overall ?? 
+      data.results?.technical?.overall ?? 0
+  })
+  .build()
+```
+
+<Tip>
+  Use function keys `key: (data) => ...` for complex conditional logic that goes beyond simple path access.
+</Tip>
